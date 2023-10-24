@@ -1,0 +1,229 @@
+
+* huihua
+
+[[https://hackage.haskell.org/package/huihua][https://img.shields.io/hackage/v/huihua.svg]]
+[[https://github.com/tonyday567/huihua/actions?query=workflow%3Ahaskell-ci][https://github.com/tonyday567/huihua/workflows/haskell-ci/badge.svg]]
+
+~huihua~ is a Haskell port of uiua
+
+* Development
+
+#+begin_src haskell :results output
+:r
+:set prompt "> "
+:set -Wno-type-defaults
+:set -Wno-name-shadowing
+:set -XOverloadedStrings
+:set -XRebindableSyntax
+:set -XQuasiQuotes
+import Prelude qualified
+import NumHask.Prelude hiding ((.))
+import NumHask.Prelude qualified as P
+import NumHask.Array.Dynamic qualified as D
+import NumHask.Array.Shape qualified as Shape
+import Huihua.Array
+import Huihua.Array qualified as A
+import Huihua.Stack
+import Huihua.Stack qualified as S
+import Huihua.Parse
+import Huihua.Parse.FlatParse
+import Data.ByteString.Char8 qualified as C
+import Data.String.Interpolate
+import Data.ByteString (ByteString)
+#+end_src
+
+#+RESULTS:
+: Ok, four modules loaded.
+
+#+begin_src haskell :results output
+runParser tokens "[@u @i @u @a]"
+#+end_src
+
+#+RESULTS:
+: OK [GlyphToken ArrayLeft,CharacterToken 'u',CharacterToken 'i',CharacterToken 'u',CharacterToken 'a',GlyphToken ArrayRight] ""
+
+#+begin_src haskell :results output
+runParser tokens [i|△."Hello, World!"|]
+#+end_src
+
+#+RESULTS:
+: OK [GlyphToken Shape,GlyphToken Duplicate,StringToken "Hello, World!"] ""
+
+#+begin_src haskell :results output
+runParser tokens [i|⊂ 1_2 3|]
+#+end_src
+
+#+RESULTS:
+: OK [GlyphToken Join,DoubleToken 1.0,GlyphToken Strand,DoubleToken 2.0,DoubleToken 3.0] ""
+
+
+#+begin_src haskell :results output
+P.length <$> C.unpack <$> allTheSymbols
+#+end_src
+
+#+RESULTS:
+: [1,1,3,1,3,2,2,2,3,3,3,3,3,3,1,3,4,3,4,3,1,1,2,2,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,1,3,1,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,1,1,3,3,1,3,3,3,2,2,2,3,1,1,1,1,1,1,1,1,2,1,1,1,3,1,1]
+
+* ToDo NYI
+
+=&p= is an effect-only. Nothing is added or subtracted form the stack.
+=---= scope
+=use=
+=&i= imports
+=~~~=  test scope
+
+[[https://www.uiua.org/docs/all-functions][All Functions]]
+
+* ToDo test isms
+
+https://www.uiua.org/docs/isms
+
+
+
+
+* ToDo negative bug
+
+This character doesn't parse properly in a *.hs file.
+"¯"
+
+#+begin_src haskell :results output
+:t Negative
+#+end_src
+
+#+RESULTS:
+: Negative :: Glyph
+
+* Creating the glyph list
+
+#+begin_src haskell :results output
+traverse_ C.putStrLn (zipWith (\s g -> [i| "#{s}" -> pure #{g}|]) allTheSymbols allTheGlyphs :: [ByteString])
+
+#+end_src
+
+#+begin_src haskell :results output
+traverse_ C.putStrLn ts
+#+end_src
+
+#+RESULTS:
+#+begin_example
+.
+,
+∶
+;
+∘
+¬
+±
+¯
+⌵
+√
+○
+⌊
+⌈
+⁅
+=
+≠
+&lt;
+≤
+&gt;
+≥
++
+-
+×
+÷
+◿
+ⁿ
+ₙ
+↧
+↥
+∠
+⧻
+△
+⇡
+⊢
+⇌
+♭
+⋯
+⍉
+⍏
+⍖
+⊚
+⊛
+⊝
+□
+⊔
+≅
+⊟
+⊂
+⊏
+⊡
+↯
+↙
+↘
+↻
+◫
+▽
+⌕
+∊
+⊗
+/
+∧
+\
+∵
+≡
+∺
+⊞
+⊠
+⍥
+⊕
+⊜
+⍘
+⋅
+⊙
+∩
+⊃
+⊓
+⍜
+⍚
+⬚
+'
+?
+⍣
+⍤
+!
+⎋
+↬
+⚂
+η
+π
+τ
+∞
+~
+_
+[]
+{}
+()
+¯
+@
+$
+"
+←
+|
+#
+#+end_example
+
+* Symbol Extraction
+
+#+begin_src haskell :results output
+-- bs = elements (markup_ Html symbolsnippet) !! 1
+-- λ> ts = [x | (Content x) <- toList bs]
+-- |
+#+end_src
+
+
+#+begin_src haskell :results output
+symbolsnippet :: ByteString
+symbolsnippet = [i|
+
+ <div class="glyph-buttons"><button class="glyph-button glyph-title" data-title="duplicate"><div class="code-font stack-function-button">.</div></button><button class="glyph-button glyph-title" data-title="over"><div class="code-font stack-function-button">,</div></button><button class="glyph-button glyph-title" data-title="(:) flip"><div class="code-font stack-function-button">∶</div></button><button class="glyph-button glyph-title" data-title="pop"><div class="code-font stack-function-button">;</div></button><button class="glyph-button glyph-title" data-title="identity"><div class="code-font stack-function-button">∘</div></button><button class="glyph-button glyph-title" data-title="not"><div class="code-font monadic-function">¬</div></button><button class="glyph-button glyph-title" data-title="sign"><div class="code-font monadic-function">±</div></button><button class="glyph-button glyph-title" data-title="(`) negate"><div class="code-font monadic-function">¯</div></button><button class="glyph-button glyph-title" data-title="absolute value"><div class="code-font monadic-function">⌵</div></button><button class="glyph-button glyph-title" data-title="sqrt"><div class="code-font monadic-function">√</div></button><button class="glyph-button glyph-title" data-title="sine"><div class="code-font monadic-function">○</div></button><button class="glyph-button glyph-title" data-title="floor"><div class="code-font monadic-function">⌊</div></button><button class="glyph-button glyph-title" data-title="ceiling"><div class="code-font monadic-function">⌈</div></button><button class="glyph-button glyph-title" data-title="round"><div class="code-font monadic-function">⁅</div></button><button class="glyph-button glyph-title" data-title="(=) equals"><div class="code-font dyadic-function">=</div></button><button class="glyph-button glyph-title" data-title="(!=) not equals"><div class="code-font dyadic-function">≠</div></button><button class="glyph-button glyph-title" data-title="less than"><div class="code-font dyadic-function">&lt;</div></button><button class="glyph-button glyph-title" data-title="(<=) less or equal"><div class="code-font dyadic-function">≤</div></button><button class="glyph-button glyph-title" data-title="greater than"><div class="code-font dyadic-function">&gt;</div></button><button class="glyph-button glyph-title" data-title="(>=) greater or equal"><div class="code-font dyadic-function">≥</div></button><button class="glyph-button glyph-title" data-title="add"><div class="code-font dyadic-function">+</div></button><button class="glyph-button glyph-title" data-title="subtract"><div class="code-font dyadic-function">-</div></button><button class="glyph-button glyph-title" data-title="(*) multiply"><div class="code-font dyadic-function">×</div></button><button class="glyph-button glyph-title" data-title="(%) divide"><div class="code-font dyadic-function">÷</div></button><button class="glyph-button glyph-title" data-title="modulus"><div class="code-font dyadic-function">◿</div></button><button class="glyph-button glyph-title" data-title="power"><div class="code-font dyadic-function">ⁿ</div></button><button class="glyph-button glyph-title" data-title="logarithm"><div class="code-font dyadic-function">ₙ</div></button><button class="glyph-button glyph-title" data-title="minimum"><div class="code-font dyadic-function">↧</div></button><button class="glyph-button glyph-title" data-title="maximum"><div class="code-font dyadic-function">↥</div></button><button class="glyph-button glyph-title" data-title="atangent"><div class="code-font dyadic-function">∠</div></button><button class="glyph-button glyph-title" data-title="length"><div class="code-font monadic-function">⧻</div></button><button class="glyph-button glyph-title" data-title="shape"><div class="code-font monadic-function">△</div></button><button class="glyph-button glyph-title" data-title="range"><div class="code-font monadic-function">⇡</div></button><button class="glyph-button glyph-title" data-title="first"><div class="code-font monadic-function">⊢</div></button><button class="glyph-button glyph-title" data-title="reverse"><div class="code-font monadic-function">⇌</div></button><button class="glyph-button glyph-title" data-title="deshape"><div class="code-font monadic-function">♭</div></button><button class="glyph-button glyph-title" data-title="bits"><div class="code-font monadic-function">⋯</div></button><button class="glyph-button glyph-title" data-title="transpose"><div class="code-font monadic-function trans">⍉</div></button><button class="glyph-button glyph-title" data-title="rise"><div class="code-font monadic-function">⍏</div></button><button class="glyph-button glyph-title" data-title="fall"><div class="code-font monadic-function">⍖</div></button><button class="glyph-button glyph-title" data-title="where"><div class="code-font monadic-function">⊚</div></button><button class="glyph-button glyph-title" data-title="classify"><div class="code-font monadic-function">⊛</div></button><button class="glyph-button glyph-title" data-title="deduplicate"><div class="code-font monadic-function">⊝</div></button><button class="glyph-button glyph-title" data-title="box"><div class="code-font monadic-function">□</div></button><button class="glyph-button glyph-title" data-title="unbox"><div class="code-font monadic-function">⊔</div></button><button class="glyph-button glyph-title" data-title="match"><div class="code-font dyadic-function">≅</div></button><button class="glyph-button glyph-title" data-title="couple"><div class="code-font dyadic-function">⊟</div></button><button class="glyph-button glyph-title" data-title="join"><div class="code-font dyadic-function">⊂</div></button><button class="glyph-button glyph-title" data-title="select"><div class="code-font dyadic-function">⊏</div></button><button class="glyph-button glyph-title" data-title="pick"><div class="code-font dyadic-function">⊡</div></button><button class="glyph-button glyph-title" data-title="reshape"><div class="code-font dyadic-function">↯</div></button><button class="glyph-button glyph-title" data-title="take"><div class="code-font dyadic-function">↙</div></button><button class="glyph-button glyph-title" data-title="drop"><div class="code-font dyadic-function">↘</div></button><button class="glyph-button glyph-title" data-title="rotate"><div class="code-font dyadic-function">↻</div></button><button class="glyph-button glyph-title" data-title="windows"><div class="code-font dyadic-function">◫</div></button><button class="glyph-button glyph-title" data-title="keep"><div class="code-font dyadic-function">▽</div></button><button class="glyph-button glyph-title" data-title="find"><div class="code-font dyadic-function">⌕</div></button><button class="glyph-button glyph-title" data-title="member"><div class="code-font dyadic-function">∊</div></button><button class="glyph-button glyph-title" data-title="indexof"><div class="code-font dyadic-function">⊗</div></button><button class="glyph-button glyph-title" data-title="reduce"><div class="code-font monadic-modifier">/</div></button><button class="glyph-button glyph-title" data-title="fold"><div class="code-font monadic-modifier">∧</div></button><button class="glyph-button glyph-title" data-title="scan"><div class="code-font monadic-modifier">\\</div></button><button class="glyph-button glyph-title" data-title="each"><div class="code-font monadic-modifier">∵</div></button><button class="glyph-button glyph-title" data-title="rows"><div class="code-font monadic-modifier">≡</div></button><button class="glyph-button glyph-title" data-title="distribute"><div class="code-font monadic-modifier">∺</div></button><button class="glyph-button glyph-title" data-title="table"><div class="code-font monadic-modifier">⊞</div></button><button class="glyph-button glyph-title" data-title="cross"><div class="code-font monadic-modifier">⊠</div></button><button class="glyph-button glyph-title" data-title="repeat"><div class="code-font monadic-modifier">⍥</div></button><button class="glyph-button glyph-title" data-title="group"><div class="code-font monadic-modifier">⊕</div></button><button class="glyph-button glyph-title" data-title="partition"><div class="code-font monadic-modifier">⊜</div></button><button class="glyph-button glyph-title" data-title="invert"><div class="code-font monadic-modifier">⍘</div></button><button class="glyph-button glyph-title" data-title="gap"><div class="code-font monadic-modifier">⋅</div></button><button class="glyph-button glyph-title" data-title="dip"><div class="code-font monadic-modifier">⊙</div></button><button class="glyph-button glyph-title" data-title="both"><div class="code-font monadic-modifier">∩</div></button><button class="glyph-button glyph-title" data-title="fork"><div class="code-font dyadic-modifier">⊃</div></button><button class="glyph-button glyph-title" data-title="bracket"><div class="code-font dyadic-modifier">⊓</div></button><button class="glyph-button glyph-title" data-title="under"><div class="code-font dyadic-modifier">⍜</div></button><button class="glyph-button glyph-title" data-title="level"><div class="code-font dyadic-modifier">⍚</div></button><button class="glyph-button glyph-title" data-title="fill"><div class="code-font dyadic-modifier">⬚</div></button><button class="glyph-button glyph-title" data-title="bind"><div class="code-font dyadic-modifier">'</div></button><button class="glyph-button glyph-title" data-title="if"><div class="code-font dyadic-modifier">?</div></button><button class="glyph-button glyph-title" data-title="try"><div class="code-font dyadic-modifier">⍣</div></button><button class="glyph-button glyph-title" data-title="assert"><div class="code-font dyadic-function">⍤</div></button><button class="glyph-button glyph-title" data-title="call"><div class="code-font variadic-function-button">!</div></button><button class="glyph-button glyph-title" data-title="break"><div class="code-font monadic-function">⎋</div></button><button class="glyph-button glyph-title" data-title="recur"><div class="code-font monadic-function">↬</div></button><button class="glyph-button glyph-title" data-title="random"><div class="code-font noadic-function-button">⚂</div></button><button class="glyph-button glyph-title" data-title="eta"><div class="code-font noadic-function-button">η</div></button><button class="glyph-button glyph-title" data-title="pi"><div class="code-font noadic-function-button">π</div></button><button class="glyph-button glyph-title" data-title="tau"><div class="code-font noadic-function-button">τ</div></button><button class="glyph-button glyph-title" data-title="infinity"><div class="code-font noadic-function-button">∞</div></button><button class="glyph-button glyph-title" data-title="trace"><div class="code-font stack-function-button">~</div></button><button class="glyph-button strand-span" data-title="strand">_</button><button class="glyph-button " data-title="array">[]</button><button class="glyph-button " data-title="box array">{}</button><button class="glyph-button " data-title="function">()</button><button class="glyph-button number-literal-span" data-title="negative (`)">¯</button><button class="glyph-button string-literal-span" data-title="character">@</button><button class="glyph-button string-literal-span" data-title="format/multiline string">$</button><button class="glyph-button string-literal-span" data-title="string">"</button><button class="glyph-button " data-title="binding (=)">←</button><button class="glyph-button " data-title="signature / terminate modifier">|</button><button class="glyph-button comment-span" data-title="comment"></button><!----></div>
+|]
+#+end_src
