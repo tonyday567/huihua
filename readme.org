@@ -64,7 +64,7 @@ P.length <$> C.unpack <$> allTheSymbols
 #+RESULTS:
 : [1,1,3,1,3,2,2,2,3,3,3,3,3,3,1,3,4,3,4,3,1,1,2,2,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,1,3,1,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,1,1,3,3,1,3,3,3,2,2,2,3,1,1,1,1,1,1,1,1,2,1,1,1,3,1,1]
 
-* ToDo NYI
+* NYI
 
 =&p= is an effect-only. Nothing is added or subtracted form the stack.
 =---= scope
@@ -74,14 +74,14 @@ P.length <$> C.unpack <$> allTheSymbols
 
 [[https://www.uiua.org/docs/all-functions][All Functions]]
 
-* ToDo test isms
+* test isms
 
 https://www.uiua.org/docs/isms
 
 
 
 
-* ToDo negative bug
+* negative bug
 
 This character doesn't parse properly in a *.hs file.
 "¯"
