@@ -79,6 +79,7 @@ import Huihua.Stack (Item (..))
 data HuiHuaWarning =
     NYI | EmptyStack1 | EmptyStack2 | ApplyFunction | NotBox | TypeMismatch | SizeMismatch | NotNat | EmptyArray | NotArray deriving (Eq, Ord, Show)
 
+
 -- $setup
 --
 -- >>> :set -XDataKinds
@@ -88,6 +89,7 @@ data HuiHuaWarning =
 -- >>> :set -XRebindableSyntax
 -- >>> import NumHask.Prelude
 -- >>> import NumHask.Array.Dynamic
+-- >>> import NumHask.Array.Dynamic as D
 -- >>> import NumHask.Array.Shape
 -- >>> let s = fromFlatList [] [1] :: Array Int
 -- >>> let a = fromFlatList [2,3,4] [1..24] :: Array Int
@@ -205,10 +207,14 @@ first = selects [0] [0]
 indexA :: Array Int -> Array a -> a
 indexA i a = D.index a (snd $ D.toFlatList i)
 
--- |
+-- | ⊡
+--
 -- >>> a = (fromFlatList [2,3] [1,2,3,4,5,6]) :: Array Int
 -- >>> pick (range . Huihua.Array.shape $ a) a == a
+-- True
+--
 -- >>> pick (fromFlatList [2,2] [0, 1, 1, 2]) a
+-- [2,6]
 pick :: Array Int -> Array a -> Array a
 pick i a = fmap (\x -> indexA x a) (extracts [0..(P.length (D.shape i) - 2)] i)
 
@@ -231,13 +237,14 @@ bits = fmap bits' >>> joins [0]
 
 -- |
 -- >>> D.transpose (fromFlatList [2,2,2] [1..8])
+--
 -- FIXME: huihua example transposes 001 to 010. A 1 rotation.
 -- This transposes 001 to 100
 transpose :: Array a -> Array a
 transpose = D.transpose
 
 -- | A.rotate (fromList1 [1]) (A.range (fromList1 [5]))
--- >>> A.rotate (fromList1 [1,2]) (fromFlatList [4,5] [0..19])
+-- >>> rotate (fromList1 [1,2]) (fromFlatList [4,5] [0..19])
 rotate :: Array Int -> Array a -> Array a
 rotate r a = D.rotates (zip [0..] (snd $ toFlatList r)) a
 

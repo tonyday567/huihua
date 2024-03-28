@@ -95,6 +95,7 @@ pop (Stack (_:xs)) = Stack xs
 identity :: Stack -> Stack
 identity = id
 
+-- >>> :t not
 not :: Item -> Item
 not (ItemInt i) = ItemInt (1 - i)
 not (ItemDouble d) = ItemDouble (1 - d)

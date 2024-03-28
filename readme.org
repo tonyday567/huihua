@@ -4,13 +4,14 @@
 [[https://hackage.haskell.org/package/huihua][https://img.shields.io/hackage/v/huihua.svg]]
 [[https://github.com/tonyday567/huihua/actions?query=workflow%3Ahaskell-ci][https://github.com/tonyday567/huihua/workflows/haskell-ci/badge.svg]]
 
-~huihua~ is a Haskell port of uiua
+~huihua~ is a Haskell port of [[https://www.uiua.org/][uiua]]
 
 * Development
 
-#+begin_src haskell :results output
+** Imports
+
+#+begin_src haskell-ng :results output
 :r
-:set prompt "> "
 :set -Wno-type-defaults
 :set -Wno-name-shadowing
 :set -XOverloadedStrings
@@ -35,6 +36,9 @@ import Data.ByteString (ByteString)
 #+RESULTS:
 : Ok, four modules loaded.
 
+* token parsing
+
+** basics
 #+begin_src haskell :results output
 runParser tokens "[@u @i @u @a]"
 #+end_src
@@ -64,6 +68,29 @@ P.length <$> C.unpack <$> allTheSymbols
 #+RESULTS:
 : [1,1,3,1,3,2,2,2,3,3,3,3,3,3,1,3,4,3,4,3,1,1,2,2,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,1,3,1,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,1,1,3,3,1,3,3,3,2,2,2,3,1,1,1,1,1,1,1,1,2,1,1,1,3,1,1]
 
+** main examples
+
+#+begin_src haskell-ng :results output
+fmap (runParser tokens) (C.lines exPage1)
+#+end_src
+
+#+RESULTS:
+: [OK [] "",OK [GlyphToken ArrayLeft,IntToken 1,IntToken 5,IntToken 8,IntToken 2,GlyphToken ArrayRight] "",OK [GlyphToken Reduce,GlyphToken Add,GlyphToken Duplicate,CommentToken " Sum"] "",OK [GlyphToken Length,GlyphToken Flip,CommentToken " Length"] "",OK [GlyphToken Divide,CommentToken " Divide"] ""]
+
+#+begin_src haskell-ng :results output
+fmap (runParser tokens) (C.lines exPage2)
+#+end_src
+
+#+RESULTS:
+: [OK [] "",OK [IntToken 2,GlyphToken Strand,IntToken 3,GlyphToken Strand,IntToken 4] "",OK [GlyphToken Reduce,GlyphToken Multiply,GlyphToken Duplicate,CommentToken " Product"] "",OK [GlyphToken Range,CommentToken " Range"] "",OK [GlyphToken Reshape,GlyphToken Flip,CommentToken " Reshape"] ""]
+
+#+begin_src haskell-ng :results output
+fmap (runParser tokens) (C.lines exPage3)
+#+end_src
+
+#+RESULTS:
+: [OK [] "",OK [StringToken "Unabashedly I utilize arrays"] "",OK [GlyphToken NotEquals,CharacterToken ' ',GlyphToken Duplicate,CommentToken " Mask of non-spaces"] "",OK [GlyphToken Partition,GlyphToken First,CommentToken " All first letters"] ""]
+
 * NYI
 
 =&p= is an effect-only. Nothing is added or subtracted form the stack.
@@ -77,9 +104,6 @@ P.length <$> C.unpack <$> allTheSymbols
 * test isms
 
 https://www.uiua.org/docs/isms
-
-
-
 
 * negative bug
 
