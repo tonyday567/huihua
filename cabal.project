@@ -2,6 +2,3 @@ packages:
   huihua.cabal
   ../numhask-array/numhask-array.cabal
 
-allow-newer:
-  string-interpolate:template-haskell,
-  string-interpolate:text
