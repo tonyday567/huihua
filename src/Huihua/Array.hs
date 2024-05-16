@@ -1,101 +1,85 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE RebindableSyntax #-}
-{-# OPTIONS_GHC -Wno-unused-imports #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# OPTIONS_GHC -Wno-redundant-constraints #-}
+{-# OPTIONS_GHC -fno-warn-incomplete-patterns #-}
+{-# OPTIONS_GHC -fno-warn-incomplete-uni-patterns #-}
+{-# OPTIONS_GHC -Wno-x-partial #-}
 
+-- | Arrays with a dynamic shape (shape only known at runtime).
 module Huihua.Array
-  (
-  Huihua.Array.not,
-  sign,
-  Huihua.Array.negate,
-  absolute,
-  Huihua.Array.sqrt,
-  Huihua.Array.sin,
-  Huihua.Array.floor,
-  Huihua.Array.ceiling,
-  Huihua.Array.round,
-  sig,
-  add,
-  subtract,
-  multiply,
-  divide,
-  equals,
-  notequals,
-  lt,
-  lte,
-  gt,
-  gte,
-  modulus,
-  power,
-  logarithm,
-  Huihua.Array.minimum,
-  Huihua.Array.maximum,
-  arctangent,
-  Huihua.Array.length,
-  Huihua.Array.shape,
-  Huihua.Array.range,
-  coerceInt,
-  coerceDouble,
-  modulusD,
-  first,
-  indexA,
-  pick,
-  fromList1,
-  fromList2,
-  deshape,
-  bits,
-  Huihua.Array.transpose,
-  Huihua.Array.rotate,
-  Huihua.Array.reverse,
-  rise,
-  fall,
-  keep,
-  where',
-  classify,
-  deduplicate,
-  match,
-  couple,
-  join,
-  select,
-  Huihua.Array.reshape,
-  Huihua.Array.take,
-  Huihua.Array.drop,
+  ( -- $usage
+    -- * uiua API
+    not,
+    sign,
+    negate,
+    absolute,
+    sqrt,
+    sin,
+    floor,
+    ceiling,
+    round,
+    sig,
+    add,
+    subtract,
+    multiply,
+    divide,
+    equals,
+    notequals,
+    lt,
+    lte,
+    gt,
+    gte,
+    modulus,
+    modulusD,
+    power,
+    logarithm,
+    minimum,
+    maximum,
+    arctangent,
+    coerceDouble,
+    coerceInt,
+
+    length,
+    shape,
+    range,
+    first,
+    indexA,
+    reverse,
+    deshape,
+    fix,
+    bits,
+    transpose,
+    rise,
+    fall,
+    where',
+    classify,
+    deduplicate,
+
+    couple,
+    match,
+    pick,
+    rotate,
+    join,
+    select,
+    take,
+    drop,
+
+    reshape,
   )
 where
 
-import NumHask.Prelude
-import NumHask.Prelude qualified as P
 import NumHask.Array.Dynamic
-import NumHask.Array.Dynamic qualified as D
-import NumHask.Array.Shape
-import NumHask.Array.Sort qualified as Sort
-import Data.Distributive (Distributive (..))
-import Data.Functor.Rep
 import Data.Vector qualified as V
-import Data.Bits
+import NumHask.Prelude hiding (not, negate, sqrt, sin, floor, ceiling, round, minimum, maximum, length, reverse, fix, take, drop)
+import NumHask.Prelude qualified as P
+import Data.Bits hiding (rotate)
 import Data.Ord
 import Data.Map.Strict qualified as Map
 import Data.Set qualified as Set
-import Huihua.Stack (Item (..))
+import Huihua.Warning
 
-data HuiHuaWarning =
-    NYI | EmptyStack1 | EmptyStack2 | ApplyFunction | NotBox | TypeMismatch | SizeMismatch | NotNat | EmptyArray | NotArray deriving (Eq, Ord, Show)
-
-
--- $setup
---
--- >>> :set -XDataKinds
--- >>> :set -XOverloadedLists
--- >>> :set -XTypeFamilies
--- >>> :set -XFlexibleContexts
--- >>> :set -XRebindableSyntax
--- >>> import NumHask.Prelude
--- >>> import NumHask.Array.Dynamic
--- >>> import NumHask.Array.Dynamic as D
--- >>> import NumHask.Array.Shape
--- >>> let s = fromFlatList [] [1] :: Array Int
--- >>> let a = fromFlatList [2,3,4] [1..24] :: Array Int
--- >>> let v = fromFlatList [3] [1,2,3] :: Array Int
--- >>> let m = fromFlatList [3,4] [0..11] :: Array Int
-
+-- * uiua api
 not :: (Ring a) => Array a -> Array a
 not = fmap (one-)
 
@@ -109,19 +93,19 @@ absolute :: (Mag a~a, Basis a) => Array a -> Array a
 absolute = fmap P.abs
 
 sqrt :: (ExpField a) => Array a -> Array a
-sqrt = fmap NumHask.Prelude.sqrt
+sqrt = fmap P.sqrt
 
 sin :: (TrigField a) => Array a -> Array a
-sin = fmap NumHask.Prelude.sin
+sin = fmap P.sin
 
 floor :: (QuotientField a, Ring (Whole a)) => Array a -> Array (Whole a)
-floor = fmap NumHask.Prelude.floor
+floor = fmap P.floor
 
 ceiling :: (QuotientField a, Ring (Whole a)) => Array a -> Array (Whole a)
-ceiling = fmap NumHask.Prelude.ceiling
+ceiling = fmap P.ceiling
 
 round :: (QuotientField a, Eq (Whole a), Ring (Whole a)) => Array a -> Array (Whole a)
-round = fmap NumHask.Prelude.round
+round = fmap P.round
 
 sig :: Bool -> Int
 sig = bool zero one
@@ -166,8 +150,8 @@ gte = binOpBool (>=)
 modulus :: (Integral a) => Array a -> Array a -> Either HuiHuaWarning (Array a)
 modulus = binArray mod
 
-modulusD :: (QuotientField a, Ring (Whole a), FromIntegral a (Whole a)) => Array a -> Array a -> Either HuiHuaWarning (Array a)
-modulusD = binArray (\d n -> n - d * fromIntegral (NumHask.Prelude.floor (n/d)))
+modulusD :: (Subtractive a, QuotientField a, Ring (Whole a), FromIntegral a (Whole a)) => Array a -> Array a -> Either HuiHuaWarning (Array a)
+modulusD = binArray (\d n -> n - d * fromIntegral (P.floor (n/d)))
 
 power :: (ExpField a) => Array a -> Array a -> Either HuiHuaWarning (Array a)
 power = binArray (**)
@@ -184,49 +168,36 @@ maximum = binArray P.max
 arctangent :: (TrigField a) => Array a -> Array a -> Either HuiHuaWarning (Array a)
 arctangent = binArray atan2
 
-length :: Array a -> Array Int
-length (Array [] _) = Array [] V.empty
-length (Array (s:_) _) = Array [1] (V.singleton s)
-
-shape :: Array a -> Array Int
-shape (Array s _) = Array [P.length s] (V.fromList s)
-
 coerceDouble :: Array Int -> Array Double
 coerceDouble = fmap fromIntegral
 
 coerceInt :: Array Double -> Either HuiHuaWarning (Array Int)
 coerceInt (Array s xs) = bool (Left NotNat) (Right $ Array s $ fmap P.floor xs) (all (\x -> x==fromIntegral (P.floor x)) xs)
 
+length :: Array a -> Array Int
+length (Array [] _) = Array [] (V.singleton one)
+length (Array (s:_) _) = Array [] (V.singleton s)
+
 range :: Array Int -> Array Int
 range (Array s xs) =
-  D.squeeze $ D.tabulate (V.toList xs <> s) (\xs' -> xs' !! last xs')
+  squeeze $ tabulate (V.toList xs <> s) (\xs' -> xs' !! last xs')
 
 first :: Array a -> Array a
 first = selects [0] [0]
 
 indexA :: Array Int -> Array a -> a
-indexA i a = D.index a (snd $ D.toFlatList i)
+indexA i a = index a (snd $ toFlatList i)
 
--- | ⊡
---
--- >>> a = (fromFlatList [2,3] [1,2,3,4,5,6]) :: Array Int
--- >>> pick (range . Huihua.Array.shape $ a) a == a
--- True
---
--- >>> pick (fromFlatList [2,2] [0, 1, 1, 2]) a
--- [2,6]
-pick :: Array Int -> Array a -> Array a
-pick i a = fmap (\x -> indexA x a) (extracts [0..(P.length (D.shape i) - 2)] i)
+reverse :: Array a -> Array a
+reverse a = reverses [0] a
 
-fromList1 :: [a] -> Array a
-fromList1 xs = fromFlatList [P.length xs] xs
-
-fromList2 :: Int -> [a] -> Array a
-fromList2 r xs = fromFlatList [r, P.length xs `div` r] xs
-
--- FIXME: technical, should off deshape along specified dimensions
+-- FIXME: technical, should deshape have to be specified along dimensions?
 deshape :: Array a -> Array a
-deshape a = D.reshape [product (D.shape a)] a
+deshape a = reshape' [P.product (shape a)] a
+
+-- | Add another axis to an array (at the end)
+fix :: Array a -> Array a
+fix (Array i v) = (Array (i <> [1]) v)
 
 bits' :: Int -> Array Int
 bits' x =
@@ -235,39 +206,12 @@ bits' x =
 bits :: Array Int -> Array Int
 bits = fmap bits' >>> joins [0]
 
--- |
--- >>> D.transpose (fromFlatList [2,2,2] [1..8])
---
--- FIXME: huihua example transposes 001 to 010. A 1 rotation.
--- This transposes 001 to 100
-transpose :: Array a -> Array a
-transpose = D.transpose
-
--- | A.rotate (fromList1 [1]) (A.range (fromList1 [5]))
--- >>> rotate (fromList1 [1,2]) (fromFlatList [4,5] [0..19])
-rotate :: Array Int -> Array a -> Array a
-rotate r a = D.rotates (zip [0..] (snd $ toFlatList r)) a
-
-reverse :: Array a -> Array a
-reverse a = reverses [0] a
-
--- >>> rise (fromList1 [6,2,7,0,-1,5])
-rise :: (Ord a) => Array a -> Array Int
-rise a = Array [V.length o] o
-  where
-    o = Sort.order $ unArray $ fmap unArray $ extracts [0] a
-
--- >>> rise (fromList1 [6,2,7,0,-1,5])
-fall :: (Ord a) => Array a -> Array Int
-fall a = Array [V.length o] o
-  where
-    o = Sort.orderBy Down $ unArray $ fmap unArray $ extracts [0] a
 
 -- >>> keep (fromList1 [1, 0, 2, 3, 1]) (fromList1 [8,3, 9, 2, 3::Int])
 -- FIXME: fix Scalar version
 -- >>> keep (toScalar 4) (fromList1 [1..5])
 keep :: Array Int -> Array a -> Either String (Array a)
-keep k a = fromList1 . fold <$> D.liftR2 ($) (fmap replicate k) a
+keep k a = fromList1 . fold <$> liftR2 ($) (fmap replicate k) a
 
 -- >>> where' (fromList1 [1,2,3])
 -- Right [0, 1, 1, 2, 2, 2]
@@ -307,7 +251,23 @@ match a a' = fromList1 [bool 0 1 (a==a')]
 --  [4, 5, 6]]
 couple :: Array a -> Array a -> Array a
 couple a a' =
-  concatenate 0 (D.reshape (1:D.shape a) a) (D.reshape (1:D.shape a') a')
+  concatenate 0 (reshape' (1:shape a) a) (reshape' (1:shape a') a')
+
+-- | ⊡
+--
+-- >>> a = (fromFlatList [2,3] [1,2,3,4,5,6]) :: Array Int
+-- >>> pick (range . Huihua.Array.shape $ a) a == a
+-- True
+--
+-- >>> pick (fromFlatList [2,2] [0, 1, 1, 2]) a
+-- [2,6]
+pick :: Array Int -> Array a -> Array a
+pick i a = fmap (\x -> indexA x a) (extracts [0..(P.length (shape i) - 2)] i)
+
+-- | A.rotate (fromList1 [1]) (A.range (fromList1 [5]))
+-- >>> rotate (fromList1 [1,2]) (fromFlatList [4,5] [0..19])
+rotate :: Array Int -> Array a -> Array a
+rotate r a = rotates (zip [0..] (snd $ toFlatList r)) a
 
 -- |
 -- >>> join (fromFlatList [2] [1,2]) (fromFlatList [2,2] [5,6,7,8::Int])
@@ -316,11 +276,10 @@ couple a a' =
 --  [7, 8]]
 join :: Array a -> Array a -> Either String (Array a)
 join a a'
-  | P.drop 1 (D.shape a) == P.drop 1 (D.shape a') = Right $ concatenate 0 a a'
-  | D.shape a == P.drop 1 (D.shape a') = Right $ concatenate 0 (D.reshape (1:D.shape a) a) a'
-  | P.drop 1 (D.shape a) == D.shape a' = Right $ concatenate 0 a (D.reshape (1:D.shape a') a')
+  | P.drop 1 (shape a) == P.drop 1 (shape a') = Right $ concatenate 0 a a'
+  | shape a == P.drop 1 (shape a') = Right $ concatenate 0 (reshape' (1:shape a) a) a'
+  | P.drop 1 (shape a) == shape a' = Right $ concatenate 0 a (reshape' (1:shape a') a')
   | otherwise = Left "Shape Mismatch"
-
 -- (\x -> selects [0] [x] (fromFlatList [2,2] [5,6,7,8::Int])) <$> [1,0]
 -- [[7, 8],[5, 6]]
 -- (\x -> selects [0] [x] (fromFlatList [4] [5,6,7,8::Int])) <$> [1,0]
@@ -333,16 +292,16 @@ join a a'
 -- >>> select (fromFlatList [4] [0,1,1,0]) (fromFlatList [4] [2,3,5,7::Int])
 -- >>> select (fromFlatList [2,2] [0,1,1,0]) (fromFlatList [2,2] [2,3,5,7::Int])
 select :: Array Int -> Array a -> Array a
-select i a = joins [0..(P.length (D.shape i) - 1)] $ (\x -> selects [0] [x] a) <$> i
+select i a = joins [0..(P.length (shape i) - 1)] $ (\x -> selects [0] [x] a) <$> i
 
 -- |
 -- FIXME: Scalar version
 --
--- >>> Huihua.Array.reshape (fromList1 [3,2]) (fromList1 [1..5::Int])
+-- >>> Huihua.Array.reshape' (fromList1 [3,2]) (fromList1 [1..5::Int])
 -- [[1, 2],
 --  [3, 4],
 --  [5, 1]]
--- >>>  Huihua.Array.reshape (fromList1 [3,-1]) (fromList1 [1..8::Int])
+-- >>>  Huihua.Array.reshape' (fromList1 [3,-1]) (fromList1 [1..8::Int])
 -- [[1, 2],
 --  [3, 4],
 --  [5, 6]]
@@ -352,7 +311,7 @@ reshape i a = Array i' (V.take (product i') (V.concat (replicate (1+ product i' 
     iflat = snd (toFlatList i)
     hasNeg = any (<0) iflat
     i' = bool iflat (fmap (\x -> bool x subDim (x<0)) iflat) hasNeg
-    subDim = product (D.shape a) `div` product (filter (>=0) iflat)
+    subDim = product (shape a) `div` product (filter (>=0) iflat)
 
 -- |
 --
@@ -370,7 +329,7 @@ take :: Array Int -> Array a -> Array a
 take i a = takes' i' a
   where
     iflat = snd $ toFlatList i
-    i' = bool iflat (iflat <> P.drop (P.length iflat) (D.shape a)) (P.length iflat < P.length (D.shape a))
+    i' = bool iflat (iflat <> P.drop (P.length iflat) (shape a)) (P.length iflat < P.length (shape a))
 
 -- |
 --
@@ -384,4 +343,12 @@ drop :: Array Int -> Array a -> Array a
 drop i a = drops' i' a
   where
     iflat = snd $ toFlatList i
-    i' = bool iflat (iflat <> replicate (P.length (D.shape a) - P.length iflat) 0) (P.length iflat < P.length (D.shape a))
+    i' = bool iflat (iflat <> replicate (P.length (shape a) - P.length iflat) 0) (P.length iflat < P.length (shape a))
+
+--- >>> rise (fromList1 [6,2,7,0,-1,5])
+rise :: (Ord a) => Array a -> Array Int
+rise a = order $ extracts [0] a
+
+--- >>> rise (fromList1 [6,2,7,0,-1,5])
+fall :: (Ord a) => Array a -> Array Int
+fall a = orderBy Down $ extracts [0] a

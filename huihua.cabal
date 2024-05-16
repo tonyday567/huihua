@@ -101,9 +101,10 @@ library
     these,
     markup-parse,
     string-interpolate >=0.3 && <0.4,
-
+    text,
   exposed-modules:
     Huihua.Array
     Huihua.Parse
     Huihua.Parse.FlatParse
     Huihua.Stack
+    Huihua.Warning

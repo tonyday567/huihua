@@ -6,9 +6,8 @@
 
 ~huihua~ is a Haskell port of [[https://www.uiua.org/][uiua]]
 
-* Development
 
-** Imports
+* Imports
 
 #+begin_src haskell-ng :results output
 :r
@@ -22,8 +21,6 @@ import NumHask.Prelude hiding ((.))
 import NumHask.Prelude qualified as P
 import NumHask.Array.Dynamic qualified as D
 import NumHask.Array.Shape qualified as Shape
-import Huihua.Array
-import Huihua.Array qualified as A
 import Huihua.Stack
 import Huihua.Stack qualified as S
 import Huihua.Parse
@@ -31,65 +28,136 @@ import Huihua.Parse.FlatParse
 import Data.ByteString.Char8 qualified as C
 import Data.String.Interpolate
 import Data.ByteString (ByteString)
+import Data.Text.Encoding
+import MarkupParse
+import Data.List qualified as List
 #+end_src
-
-#+RESULTS:
-: Ok, four modules loaded.
 
 * token parsing
 
 ** basics
-#+begin_src haskell :results output
+
+#+begin_src haskell-ng :results output
 runParser tokens "[@u @i @u @a]"
 #+end_src
 
 #+RESULTS:
 : OK [GlyphToken ArrayLeft,CharacterToken 'u',CharacterToken 'i',CharacterToken 'u',CharacterToken 'a',GlyphToken ArrayRight] ""
 
-#+begin_src haskell :results output
+#+begin_src haskell-ng :results output
 runParser tokens [i|△."Hello, World!"|]
 #+end_src
 
 #+RESULTS:
 : OK [GlyphToken Shape,GlyphToken Duplicate,StringToken "Hello, World!"] ""
 
-#+begin_src haskell :results output
+#+begin_src haskell-ng :results output
+
 runParser tokens [i|⊂ 1_2 3|]
 #+end_src
 
 #+RESULTS:
-: OK [GlyphToken Join,DoubleToken 1.0,GlyphToken Strand,DoubleToken 2.0,DoubleToken 3.0] ""
+: OK [GlyphToken Join,IntToken 1,GlyphToken Strand,IntToken 2,IntToken 3] ""
 
 
-#+begin_src haskell :results output
+#+begin_src haskell-ng :results output
 P.length <$> C.unpack <$> allTheSymbols
 #+end_src
 
 #+RESULTS:
 : [1,1,3,1,3,2,2,2,3,3,3,3,3,3,1,3,4,3,4,3,1,1,2,2,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,1,3,1,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,1,1,3,3,1,3,3,3,2,2,2,3,1,1,1,1,1,1,1,1,2,1,1,1,3,1,1]
 
-** main examples
+** interp debug
+ *** not
 
 #+begin_src haskell-ng :results output
-fmap (runParser tokens) (C.lines exPage1)
+x1 = "\194\172" :: ByteString
+x1
+encodeUtf8 "¬"
+C.putStrLn x1
+runParser glyph "¬"
+runParser glyph x1
+runParser glyph (encodeUtf8 "¬")
 #+end_src
 
 #+RESULTS:
-: [OK [] "",OK [GlyphToken ArrayLeft,IntToken 1,IntToken 5,IntToken 8,IntToken 2,GlyphToken ArrayRight] "",OK [GlyphToken Reduce,GlyphToken Add,GlyphToken Duplicate,CommentToken " Sum"] "",OK [GlyphToken Length,GlyphToken Flip,CommentToken " Length"] "",OK [GlyphToken Divide,CommentToken " Divide"] ""]
+: "\194\172"
+: "\194\172"
+: ¬
+: Fail
+: OK Not ""
+: OK Not ""
 
 #+begin_src haskell-ng :results output
-fmap (runParser tokens) (C.lines exPage2)
+bs = encodeUtf8 "¬ 3 [0 1]"
+interp bs
+C.putStrLn bs
 #+end_src
 
 #+RESULTS:
-: [OK [] "",OK [IntToken 2,GlyphToken Strand,IntToken 3,GlyphToken Strand,IntToken 4] "",OK [GlyphToken Reduce,GlyphToken Multiply,GlyphToken Duplicate,CommentToken " Product"] "",OK [GlyphToken Range,CommentToken " Range"] "",OK [GlyphToken Reshape,GlyphToken Flip,CommentToken " Reshape"] ""]
+: That (Stack {stackList = [-2,[1, 0]]})
+: ¬ 3 [0 1]
+
+*** ToDo ex1
+
+- [X] reverse order of arrays
+- [X] reverse order of assembled ops
+- [X] array left bug
+- [X] implement in compute1
+- [ ] refactor
+  - do away with raw Ints and Doubles
 
 #+begin_src haskell-ng :results output
-fmap (runParser tokens) (C.lines exPage3)
+bs = exPage1
 #+end_src
 
 #+RESULTS:
-: [OK [] "",OK [StringToken "Unabashedly I utilize arrays"] "",OK [GlyphToken NotEquals,CharacterToken ' ',GlyphToken Duplicate,CommentToken " Mask of non-spaces"] "",OK [GlyphToken Partition,GlyphToken First,CommentToken " All first letters"] ""]
+
+pipeline
+
+#+begin_src haskell-ng :results output
+bs
+C.putStr bs
+-- C.lines bs
+-- C.lines bs & fmap (runParser tokens)
+-- C.lines bs & fmap (runParser_ tokens) & orderUiua
+C.lines bs & fmap (runParser_ tokens) & orderUiua & assemblef & List.reverse
+s = C.lines bs & fmap (runParser_ tokens) & orderUiua & assemblef & foldr compute1 (Stack [])
+s
+#+end_src
+
+#+RESULTS:
+: "\n[1 5 8 2]\n/+. # Sum\n\226\167\187\226\136\182  # Length\n\195\183   # Divide\n"
+: [1 5 8 2]
+: /+. # Sum
+: ⧻∶  # Length
+: ÷   # Divide
+: [AArrayInt [1, 5, 8, 2],AOp Duplicate,AReduceOp Add,AOp Flip,AOp Length,AOp Divide]
+: Stack {stackList = [4.0]}
+
+shapes are ok ...
+
+#+begin_src haskell-ng :results output
+:set -Wno-incomplete-uni-patterns
+(Stack (ItemArrayInt x:ItemArrayInt y:xs)) = s3
+shape x
+shape y
+(ItemArrayDouble z) = binOpD (/) (ItemArrayInt y) (ItemArrayInt x)
+shape z
+#+end_src
+
+#+RESULTS:
+: []
+: []
+: []
+
+#+begin_src haskell-ng :results output
+C.lines bs & fmap (runParser_ tokens) & orderUiua & assemblef & foldr compute1 (Stack [])
+#+end_src
+
+#+RESULTS:
+: Stack {stackList = [4.0]}
+
 
 * NYI
 
@@ -119,135 +187,343 @@ This character doesn't parse properly in a *.hs file.
 
 * Creating the glyph list
 
-#+begin_src haskell :results output
-traverse_ C.putStrLn (zipWith (\s g -> [i| "#{s}" -> pure #{g}|]) allTheSymbols allTheGlyphs :: [ByteString])
+Note that direct comparison between a ByteString and it's representation may not be what you expect eg
 
+#+begin_src haskell-ng :results output
+symNot = allTheSymbols List.!! 5
+C.putStrLn symNot
+symNot
+"¬" == symNot
+"\194\172" == symNot
 #+end_src
 
-#+begin_src haskell :results output
-traverse_ C.putStrLn ts
+#+RESULTS:
+: ¬
+: "\194\172"
+: False
+: True
+
+#+begin_src haskell-ng :results output
+xs = (zipWith (\s g -> [i|"#{s}" -> pure #{g}|]) allTheSymbols allTheGlyphs :: [ByteString])
+traverse_ C.putStrLn xs
 #+end_src
 
 #+RESULTS:
 #+begin_example
-.
-,
-∶
-;
-∘
-¬
-±
-¯
-⌵
-√
-○
-⌊
-⌈
-⁅
-=
-≠
-&lt;
-≤
-&gt;
-≥
-+
--
-×
-÷
-◿
-ⁿ
-ₙ
-↧
-↥
-∠
-⧻
-△
-⇡
-⊢
-⇌
-♭
-⋯
-⍉
-⍏
-⍖
-⊚
-⊛
-⊝
-□
-⊔
-≅
-⊟
-⊂
-⊏
-⊡
-↯
-↙
-↘
-↻
-◫
-▽
-⌕
-∊
-⊗
-/
-∧
-\
-∵
-≡
-∺
-⊞
-⊠
-⍥
-⊕
-⊜
-⍘
-⋅
-⊙
-∩
-⊃
-⊓
-⍜
-⍚
-⬚
-'
-?
-⍣
-⍤
-!
-⎋
-↬
-⚂
-η
-π
-τ
-∞
-~
-_
-[]
-{}
-()
-¯
-@
-$
-"
-←
-|
-#
+"." -> pure Duplicate
+"," -> pure Over
+"∶" -> pure Flip
+";" -> pure Pop
+"∘" -> pure Identity
+"¬" -> pure Not
+"±" -> pure Sign
+"¯" -> pure Negate
+"⌵" -> pure AbsoluteValue
+"√" -> pure Sqrt
+"○" -> pure Sine
+"⌊" -> pure Floor
+"⌈" -> pure Ceiling
+"⁅" -> pure Round
+"=" -> pure Equals
+"≠" -> pure NotEquals
+"&lt;" -> pure LessThan
+"≤" -> pure LessOrEqual
+"&gt;" -> pure GreaterThan
+"≥" -> pure GreaterOrEqual
+"+" -> pure Add
+"-" -> pure Subtract
+"×" -> pure Multiply
+"÷" -> pure Divide
+"◿" -> pure Modulus
+"ⁿ" -> pure Power
+"ₙ" -> pure Logarithm
+"↧" -> pure Minimum
+"↥" -> pure Maximum
+"∠" -> pure Atangent
+"⧻" -> pure Length
+"△" -> pure Shape
+"⇡" -> pure Range
+"⊢" -> pure First
+"⇌" -> pure Reverse
+"♭" -> pure Deshape
+"⋯" -> pure Bits
+"⍉" -> pure Transpose
+"⍏" -> pure Rise
+"⍖" -> pure Fall
+"⊚" -> pure Where
+"⊛" -> pure Classify
+"⊝" -> pure Deduplicate
+"□" -> pure Box
+"⊔" -> pure Unbox
+"≅" -> pure Match
+"⊟" -> pure Couple
+"⊂" -> pure Join
+"⊏" -> pure Select
+"⊡" -> pure Pick
+"↯" -> pure Reshape
+"↙" -> pure Take
+"↘" -> pure Drop
+"↻" -> pure Rotate
+"◫" -> pure Windows
+"▽" -> pure Keep
+"⌕" -> pure Find
+"∊" -> pure Member
+"⊗" -> pure IndexOf
+"/" -> pure Reduce
+"∧" -> pure Fold
+"\" -> pure Scan
+"∵" -> pure Each
+"≡" -> pure Rows
+"∺" -> pure Distribute
+"⊞" -> pure Table
+"⊠" -> pure Cross
+"⍥" -> pure Repeat
+"⊕" -> pure Group
+"⊜" -> pure Partition
+"⍘" -> pure Invert
+"⋅" -> pure Gap
+"⊙" -> pure Dip
+"∩" -> pure Both
+"⊃" -> pure Fork
+"⊓" -> pure Bracket
+"⍜" -> pure Under
+"⍚" -> pure Level
+"⬚" -> pure Fill
+"'" -> pure Bind
+"?" -> pure If
+"⍣" -> pure Try
+"⍤" -> pure Assert
+"!" -> pure Call
+"⎋" -> pure Break
+"↬" -> pure Recur
+"⚂" -> pure Random
+"η" -> pure Eta
+"π" -> pure Pi
+"τ" -> pure Tau
+"∞" -> pure Infinity
+"~" -> pure Trace
+"_" -> pure Strand
+"[" -> pure ArrayLeft
+"]" -> pure ArrayRight
+"{" -> pure BoxArrayLeft
+"}" -> pure BoxArrayRight
+"(" -> pure FunctionLeft
+")" -> pure FunctionRight
+"¯" -> pure Negative
+"@" -> pure Format
+"$" -> pure String
+""" -> pure Binding
+"←" -> pure Signature
+"|" -> pure Comment
 #+end_example
+
+
+#+begin_src haskell-ng :results output
+traverse_ C.putStrLn allTheSymbols
+#+end_src
+
+* equality in haskell code
+
+#+begin_src haskell-ng :results output
+symNot = allTheSymbols List.!! 5
+C.putStrLn symNot
+symNot
+-- traverse_ C.putStrLn (P.take 8 allTheSymbols)
+"¬" == symNot
+"\194\172" == symNot
+#+end_src
+
+#+RESULTS:
+: ¬
+: "\194\172"
+: False
+: True
 
 * Symbol Extraction
 
-#+begin_src haskell :results output
--- bs = elements (markup_ Html symbolsnippet) !! 1
--- λ> ts = [x | (Content x) <- toList bs]
--- |
-#+end_src
-
-
-#+begin_src haskell :results output
+#+begin_src haskell-ng :results output
+:{
 symbolsnippet :: ByteString
 symbolsnippet = [i|
-
  <div class="glyph-buttons"><button class="glyph-button glyph-title" data-title="duplicate"><div class="code-font stack-function-button">.</div></button><button class="glyph-button glyph-title" data-title="over"><div class="code-font stack-function-button">,</div></button><button class="glyph-button glyph-title" data-title="(:) flip"><div class="code-font stack-function-button">∶</div></button><button class="glyph-button glyph-title" data-title="pop"><div class="code-font stack-function-button">;</div></button><button class="glyph-button glyph-title" data-title="identity"><div class="code-font stack-function-button">∘</div></button><button class="glyph-button glyph-title" data-title="not"><div class="code-font monadic-function">¬</div></button><button class="glyph-button glyph-title" data-title="sign"><div class="code-font monadic-function">±</div></button><button class="glyph-button glyph-title" data-title="(`) negate"><div class="code-font monadic-function">¯</div></button><button class="glyph-button glyph-title" data-title="absolute value"><div class="code-font monadic-function">⌵</div></button><button class="glyph-button glyph-title" data-title="sqrt"><div class="code-font monadic-function">√</div></button><button class="glyph-button glyph-title" data-title="sine"><div class="code-font monadic-function">○</div></button><button class="glyph-button glyph-title" data-title="floor"><div class="code-font monadic-function">⌊</div></button><button class="glyph-button glyph-title" data-title="ceiling"><div class="code-font monadic-function">⌈</div></button><button class="glyph-button glyph-title" data-title="round"><div class="code-font monadic-function">⁅</div></button><button class="glyph-button glyph-title" data-title="(=) equals"><div class="code-font dyadic-function">=</div></button><button class="glyph-button glyph-title" data-title="(!=) not equals"><div class="code-font dyadic-function">≠</div></button><button class="glyph-button glyph-title" data-title="less than"><div class="code-font dyadic-function">&lt;</div></button><button class="glyph-button glyph-title" data-title="(<=) less or equal"><div class="code-font dyadic-function">≤</div></button><button class="glyph-button glyph-title" data-title="greater than"><div class="code-font dyadic-function">&gt;</div></button><button class="glyph-button glyph-title" data-title="(>=) greater or equal"><div class="code-font dyadic-function">≥</div></button><button class="glyph-button glyph-title" data-title="add"><div class="code-font dyadic-function">+</div></button><button class="glyph-button glyph-title" data-title="subtract"><div class="code-font dyadic-function">-</div></button><button class="glyph-button glyph-title" data-title="(*) multiply"><div class="code-font dyadic-function">×</div></button><button class="glyph-button glyph-title" data-title="(%) divide"><div class="code-font dyadic-function">÷</div></button><button class="glyph-button glyph-title" data-title="modulus"><div class="code-font dyadic-function">◿</div></button><button class="glyph-button glyph-title" data-title="power"><div class="code-font dyadic-function">ⁿ</div></button><button class="glyph-button glyph-title" data-title="logarithm"><div class="code-font dyadic-function">ₙ</div></button><button class="glyph-button glyph-title" data-title="minimum"><div class="code-font dyadic-function">↧</div></button><button class="glyph-button glyph-title" data-title="maximum"><div class="code-font dyadic-function">↥</div></button><button class="glyph-button glyph-title" data-title="atangent"><div class="code-font dyadic-function">∠</div></button><button class="glyph-button glyph-title" data-title="length"><div class="code-font monadic-function">⧻</div></button><button class="glyph-button glyph-title" data-title="shape"><div class="code-font monadic-function">△</div></button><button class="glyph-button glyph-title" data-title="range"><div class="code-font monadic-function">⇡</div></button><button class="glyph-button glyph-title" data-title="first"><div class="code-font monadic-function">⊢</div></button><button class="glyph-button glyph-title" data-title="reverse"><div class="code-font monadic-function">⇌</div></button><button class="glyph-button glyph-title" data-title="deshape"><div class="code-font monadic-function">♭</div></button><button class="glyph-button glyph-title" data-title="bits"><div class="code-font monadic-function">⋯</div></button><button class="glyph-button glyph-title" data-title="transpose"><div class="code-font monadic-function trans">⍉</div></button><button class="glyph-button glyph-title" data-title="rise"><div class="code-font monadic-function">⍏</div></button><button class="glyph-button glyph-title" data-title="fall"><div class="code-font monadic-function">⍖</div></button><button class="glyph-button glyph-title" data-title="where"><div class="code-font monadic-function">⊚</div></button><button class="glyph-button glyph-title" data-title="classify"><div class="code-font monadic-function">⊛</div></button><button class="glyph-button glyph-title" data-title="deduplicate"><div class="code-font monadic-function">⊝</div></button><button class="glyph-button glyph-title" data-title="box"><div class="code-font monadic-function">□</div></button><button class="glyph-button glyph-title" data-title="unbox"><div class="code-font monadic-function">⊔</div></button><button class="glyph-button glyph-title" data-title="match"><div class="code-font dyadic-function">≅</div></button><button class="glyph-button glyph-title" data-title="couple"><div class="code-font dyadic-function">⊟</div></button><button class="glyph-button glyph-title" data-title="join"><div class="code-font dyadic-function">⊂</div></button><button class="glyph-button glyph-title" data-title="select"><div class="code-font dyadic-function">⊏</div></button><button class="glyph-button glyph-title" data-title="pick"><div class="code-font dyadic-function">⊡</div></button><button class="glyph-button glyph-title" data-title="reshape"><div class="code-font dyadic-function">↯</div></button><button class="glyph-button glyph-title" data-title="take"><div class="code-font dyadic-function">↙</div></button><button class="glyph-button glyph-title" data-title="drop"><div class="code-font dyadic-function">↘</div></button><button class="glyph-button glyph-title" data-title="rotate"><div class="code-font dyadic-function">↻</div></button><button class="glyph-button glyph-title" data-title="windows"><div class="code-font dyadic-function">◫</div></button><button class="glyph-button glyph-title" data-title="keep"><div class="code-font dyadic-function">▽</div></button><button class="glyph-button glyph-title" data-title="find"><div class="code-font dyadic-function">⌕</div></button><button class="glyph-button glyph-title" data-title="member"><div class="code-font dyadic-function">∊</div></button><button class="glyph-button glyph-title" data-title="indexof"><div class="code-font dyadic-function">⊗</div></button><button class="glyph-button glyph-title" data-title="reduce"><div class="code-font monadic-modifier">/</div></button><button class="glyph-button glyph-title" data-title="fold"><div class="code-font monadic-modifier">∧</div></button><button class="glyph-button glyph-title" data-title="scan"><div class="code-font monadic-modifier">\\</div></button><button class="glyph-button glyph-title" data-title="each"><div class="code-font monadic-modifier">∵</div></button><button class="glyph-button glyph-title" data-title="rows"><div class="code-font monadic-modifier">≡</div></button><button class="glyph-button glyph-title" data-title="distribute"><div class="code-font monadic-modifier">∺</div></button><button class="glyph-button glyph-title" data-title="table"><div class="code-font monadic-modifier">⊞</div></button><button class="glyph-button glyph-title" data-title="cross"><div class="code-font monadic-modifier">⊠</div></button><button class="glyph-button glyph-title" data-title="repeat"><div class="code-font monadic-modifier">⍥</div></button><button class="glyph-button glyph-title" data-title="group"><div class="code-font monadic-modifier">⊕</div></button><button class="glyph-button glyph-title" data-title="partition"><div class="code-font monadic-modifier">⊜</div></button><button class="glyph-button glyph-title" data-title="invert"><div class="code-font monadic-modifier">⍘</div></button><button class="glyph-button glyph-title" data-title="gap"><div class="code-font monadic-modifier">⋅</div></button><button class="glyph-button glyph-title" data-title="dip"><div class="code-font monadic-modifier">⊙</div></button><button class="glyph-button glyph-title" data-title="both"><div class="code-font monadic-modifier">∩</div></button><button class="glyph-button glyph-title" data-title="fork"><div class="code-font dyadic-modifier">⊃</div></button><button class="glyph-button glyph-title" data-title="bracket"><div class="code-font dyadic-modifier">⊓</div></button><button class="glyph-button glyph-title" data-title="under"><div class="code-font dyadic-modifier">⍜</div></button><button class="glyph-button glyph-title" data-title="level"><div class="code-font dyadic-modifier">⍚</div></button><button class="glyph-button glyph-title" data-title="fill"><div class="code-font dyadic-modifier">⬚</div></button><button class="glyph-button glyph-title" data-title="bind"><div class="code-font dyadic-modifier">'</div></button><button class="glyph-button glyph-title" data-title="if"><div class="code-font dyadic-modifier">?</div></button><button class="glyph-button glyph-title" data-title="try"><div class="code-font dyadic-modifier">⍣</div></button><button class="glyph-button glyph-title" data-title="assert"><div class="code-font dyadic-function">⍤</div></button><button class="glyph-button glyph-title" data-title="call"><div class="code-font variadic-function-button">!</div></button><button class="glyph-button glyph-title" data-title="break"><div class="code-font monadic-function">⎋</div></button><button class="glyph-button glyph-title" data-title="recur"><div class="code-font monadic-function">↬</div></button><button class="glyph-button glyph-title" data-title="random"><div class="code-font noadic-function-button">⚂</div></button><button class="glyph-button glyph-title" data-title="eta"><div class="code-font noadic-function-button">η</div></button><button class="glyph-button glyph-title" data-title="pi"><div class="code-font noadic-function-button">π</div></button><button class="glyph-button glyph-title" data-title="tau"><div class="code-font noadic-function-button">τ</div></button><button class="glyph-button glyph-title" data-title="infinity"><div class="code-font noadic-function-button">∞</div></button><button class="glyph-button glyph-title" data-title="trace"><div class="code-font stack-function-button">~</div></button><button class="glyph-button strand-span" data-title="strand">_</button><button class="glyph-button " data-title="array">[]</button><button class="glyph-button " data-title="box array">{}</button><button class="glyph-button " data-title="function">()</button><button class="glyph-button number-literal-span" data-title="negative (`)">¯</button><button class="glyph-button string-literal-span" data-title="character">@</button><button class="glyph-button string-literal-span" data-title="format/multiline string">$</button><button class="glyph-button string-literal-span" data-title="string">"</button><button class="glyph-button " data-title="binding (=)">←</button><button class="glyph-button " data-title="signature / terminate modifier">|</button><button class="glyph-button comment-span" data-title="comment"></button><!----></div>
 |]
+:}
 #+end_src
+
+#+begin_src haskell-ng :results output
+bs = elements (markup_ Html symbolsnippet) !! 1
+ts = [x | (Content x) <- toList bs]
+#+end_src
+
+#+begin_src haskell-ng :results output
+ts
+#+end_src
+
+#+RESULTS:
+: [".",",","\226\136\182",";","\226\136\152","\194\172","\194\177","\194\175","\226\140\181","\226\136\154","\226\151\139","\226\140\138","\226\140\136","\226\129\133","=","\226\137\160","&lt;","\226\137\164","&gt;","\226\137\165","+","-","\195\151","\195\183","\226\151\191","\226\129\191","\226\130\153","\226\134\167","\226\134\165","\226\136\160","\226\167\187","\226\150\179","\226\135\161","\226\138\162","\226\135\140","\226\153\173","\226\139\175","\226\141\137","\226\141\143","\226\141\150","\226\138\154","\226\138\155","\226\138\157","\226\150\161","\226\138\148","\226\137\133","\226\138\159","\226\138\130","\226\138\143","\226\138\161","\226\134\175","\226\134\153","\226\134\152","\226\134\187","\226\151\171","\226\150\189","\226\140\149","\226\136\138","\226\138\151","/","\226\136\167","\\","\226\136\181","\226\137\161","\226\136\186","\226\138\158","\226\138\160","\226\141\165","\226\138\149","\226\138\156","\226\141\152","\226\139\133","\226\138\153","\226\136\169","\226\138\131","\226\138\147","\226\141\156","\226\141\154","\226\172\154","'","?","\226\141\163","\226\141\164","!","\226\142\139","\226\134\172","\226\154\130","\206\183","\207\128","\207\132","\226\136\158","~","_","[]","{}","()","\194\175","@","$","\"","\226\134\144","|"]
+
+#+begin_src haskell-ng :results output
+mapM_ print ts
+#+end_src
+
+#+RESULTS:
+#+begin_example
+"."
+","
+"\226\136\182"
+";"
+"\226\136\152"
+"\194\172"
+"\194\177"
+"\194\175"
+"\226\140\181"
+"\226\136\154"
+"\226\151\139"
+"\226\140\138"
+"\226\140\136"
+"\226\129\133"
+"="
+"\226\137\160"
+"&lt;"
+"\226\137\164"
+"&gt;"
+"\226\137\165"
+"+"
+"-"
+"\195\151"
+"\195\183"
+"\226\151\191"
+"\226\129\191"
+"\226\130\153"
+"\226\134\167"
+"\226\134\165"
+"\226\136\160"
+"\226\167\187"
+"\226\150\179"
+"\226\135\161"
+"\226\138\162"
+"\226\135\140"
+"\226\153\173"
+"\226\139\175"
+"\226\141\137"
+"\226\141\143"
+"\226\141\150"
+"\226\138\154"
+"\226\138\155"
+"\226\138\157"
+"\226\150\161"
+"\226\138\148"
+"\226\137\133"
+"\226\138\159"
+"\226\138\130"
+"\226\138\143"
+"\226\138\161"
+"\226\134\175"
+"\226\134\153"
+"\226\134\152"
+"\226\134\187"
+"\226\151\171"
+"\226\150\189"
+"\226\140\149"
+"\226\136\138"
+"\226\138\151"
+"/"
+"\226\136\167"
+"\\"
+"\226\136\181"
+"\226\137\161"
+"\226\136\186"
+"\226\138\158"
+"\226\138\160"
+"\226\141\165"
+"\226\138\149"
+"\226\138\156"
+"\226\141\152"
+"\226\139\133"
+"\226\138\153"
+"\226\136\169"
+"\226\138\131"
+"\226\138\147"
+"\226\141\156"
+"\226\141\154"
+"\226\172\154"
+"'"
+"?"
+"\226\141\163"
+"\226\141\164"
+"!"
+"\226\142\139"
+"\226\134\172"
+"\226\154\130"
+"\206\183"
+"\207\128"
+"\207\132"
+"\226\136\158"
+"~"
+"_"
+"[]"
+"{}"
+"()"
+"\194\175"
+"@"
+"$"
+"\""
+"\226\134\144"
+"|"
+#+end_example
+
+#+begin_src haskell-ng :results output
+padSymbols = ".,:◌∘¬±¯⌵√∿⌊⌈⁅=≠<≤>≥+-×÷◿ⁿₙ↧↥∠ℂ⧻△⇡⊢⇌♭¤⋯⍉⍏⍖⊚⊛◴◰□⋕≍⊟⊂⊏⊡↯☇↙↘↻◫▽⌕⦷∊⊗⟔/∧\\∵≡⊞⍚⍥⊕⊜◇⋅⊙⟜⊸∩°⍜⊃⊓⍢⬚⍣⍤⚂ηπτ∞?⸮_[]{}()⟨⟩‿¯@$\"!^←↚~|#" :: ByteString
+#+end_src
+
+#+RESULTS:
+
+#+begin_src haskell-ng :results output
+T.putStrLn $ decodeUtf8Lenient padSymbols
+#+end_src
+
+#+RESULTS:
+: .,:����5?
+: E=`<d>e+-������ �����m��IOV������M�����������
+: ��/'\5a�Ze���řܸ)�\��bcd����?._[]{}()��?�@$"!^��~|#
+
+#+begin_src haskell-ng :results output
+padSymbols == (C.pack $ C.unpack padSymbols)
+#+end_src
+
+#+RESULTS:
+: True
+
+#+begin_src haskell-ng :results output
+encodeUtf8 ".,:◌∘¬±¯⌵√∿⌊⌈⁅=≠<≤>≥+-×÷◿ⁿₙ↧↥∠ℂ⧻△⇡⊢⇌♭¤⋯⍉⍏⍖⊚⊛◴◰□⋕≍⊟⊂⊏⊡↯☇↙↘↻◫▽⌕⦷∊⊗⟔/∧\\∵≡⊞⍚⍥⊕⊜◇⋅⊙⟜⊸∩°⍜⊃⊓⍢⬚⍣⍤⚂ηπτ∞?⸮_[]{}()⟨⟩‿¯@$\"!^←↚~|#"
+-- print $ C.singleton <$> C.unpack padSymbols
+#+end_src
+
+#+RESULTS:
+: ".,:\226\151\140\226\136\152\194\172\194\177\194\175\226\140\181\226\136\154\226\136\191\226\140\138\226\140\136\226\129\133=\226\137\160<\226\137\164>\226\137\165+-\195\151\195\183\226\151\191\226\129\191\226\130\153\226\134\167\226\134\165\226\136\160\226\132\130\226\167\187\226\150\179\226\135\161\226\138\162\226\135\140\226\153\173\194\164\226\139\175\226\141\137\226\141\143\226\141\150\226\138\154\226\138\155\226\151\180\226\151\176\226\150\161\226\139\149\226\137\141\226\138\159\226\138\130\226\138\143\226\138\161\226\134\175\226\152\135\226\134\153\226\134\152\226\134\187\226\151\171\226\150\189\226\140\149\226\166\183\226\136\138\226\138\151\226\159\148/\226\136\167\\\226\136\181\226\137\161\226\138\158\226\141\154\226\141\165\226\138\149\226\138\156\226\151\135\226\139\133\226\138\153\226\159\156\226\138\184\226\136\169\194\176\226\141\156\226\138\131\226\138\147\226\141\162\226\172\154\226\141\163\226\141\164\226\154\130\206\183\207\128\207\132\226\136\158?\226\184\174_[]{}()\226\159\168\226\159\169\226\128\191\194\175@$\"!^\226\134\144\226\134\154~|#"
+
+#+begin_src haskell-ng :results output
+print $ decodeUtf8Lenient $ encodeUtf8 ".,:◌∘¬±¯⌵√∿⌊⌈⁅=≠<≤>≥+-×÷◿ⁿₙ↧↥∠ℂ⧻△⇡⊢⇌♭¤⋯⍉⍏⍖⊚⊛◴◰□⋕≍⊟⊂⊏⊡↯☇↙↘↻◫▽⌕⦷∊⊗⟔/∧\\∵≡⊞⍚⍥⊕⊜◇⋅⊙⟜⊸∩°⍜⊃⊓⍢⬚⍣⍤⚂ηπτ∞?⸮_[]{}()⟨⟩‿¯@$\"!^←↚~|#"
+-- print $ C.singleton <$> C.unpack padSymbols
+#+end_src
+
+#+RESULTS:
+: ".,:\9676\8728\172\177\175\9013\8730\8767\8970\8968\8261=\8800<\8804>\8805+-\215\247\9727\8319\8345\8615\8613\8736\8450\10747\9651\8673\8866\8652\9837\164\8943\9033\9039\9046\8858\8859\9716\9712\9633\8917\8781\8863\8834\8847\8865\8623\9735\8601\8600\8635\9707\9661\8981\10679\8714\8855\10196/\8743\\\8757\8801\8862\9050\9061\8853\8860\9671\8901\8857\10204\8888\8745\176\9052\8835\8851\9058\11034\9059\9060\9858\951\960\964\8734?\11822_[]{}()\10216\10217\8255\175@$\"!^\8592\8602~|#"
+
+
+#+begin_src haskell-ng :results output
+import Data.Text (Text)
+import Data.Text qualified as T
+import Data.Text.IO qualified as T
+symText =  ".,:◌∘¬±¯⌵√∿⌊⌈⁅=≠<≤>≥+-×÷◿ⁿₙ↧↥∠ℂ⧻△⇡⊢⇌♭¤⋯⍉⍏⍖⊚⊛◴◰□⋕≍⊟⊂⊏⊡↯☇↙↘↻◫▽⌕⦷∊⊗⟔/∧\\∵≡⊞⍚⍥⊕⊜◇⋅⊙⟜⊸∩°⍜⊃⊓⍢⬚⍣⍤⚂ηπτ∞?⸮_[]{}()⟨⟩‿¯@$\"!^←↚~|#" :: Text
+#+end_src
+
+#+RESULTS:
+
+
+#+begin_src haskell-ng
+T.putStrLn symText
+#+end_src
+
+#+RESULTS:
+: .,:◌∘¬±¯⌵√∿⌊⌈⁅=≠<≤>≥+-×÷◿ⁿₙ↧↥∠ℂ⧻△⇡⊢⇌♭¤⋯⍉⍏⍖⊚⊛◴◰□⋕≍⊟⊂⊏⊡↯☇↙↘↻◫▽⌕⦷∊⊗⟔/∧\∵≡⊞⍚⍥⊕⊜◇⋅⊙⟜⊸∩°⍜⊃⊓⍢⬚⍣⍤⚂ηπτ∞?⸮_[]{}()⟨⟩‿¯@$"!^←↚~|#
