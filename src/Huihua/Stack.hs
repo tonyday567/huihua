@@ -11,7 +11,6 @@ module Huihua.Stack
   Huihua.Stack.flip,
   pop,
   identity,
-  Huihua.Stack.not,
   sign,
   Huihua.Stack.negate,
   absolute,
@@ -22,6 +21,7 @@ module Huihua.Stack
   Huihua.Stack.round,
   sig,
   unaryOp,
+  unaryOpA,
   binOp,
   fromInt,
   add,
@@ -60,69 +60,55 @@ import Data.Functor.Rep
 import Data.Vector qualified as V
 import Huihua.Warning
 
-data Item =
-  ItemArrayInt (Array Int) | ItemArrayDouble (Array Double)
-  | ItemFunction (Stack -> Stack) | ItemError HuiHuaWarning
+-- $setup
+-- >>> :set -XOverloadedStrings
+-- >>> import Huihua.Stack as S
+-- >>> import NumHask.Array.Dynamic as A
+
+data Item = ItemArrayInt (Array Int) | ItemArrayDouble (Array Double) deriving (Show, Eq)
 
 newtype Stack =
-  Stack { stackList :: [Item] } deriving (Show)
-
-instance Show Item
-  where
-    show (ItemArrayInt xs) = "ints " <> show xs
-    show (ItemArrayDouble xs) = "dbls " <> show xs
-    show (ItemFunction _) = "fn"
-    show (ItemError w) = show w
+  Stack { stackList :: [Item] } deriving (Show, Eq)
 
 push :: Item -> Stack -> Stack
-push (ItemFunction f) s = f s
 push i (Stack s) = Stack (i:s)
 
-duplicate :: Stack -> Stack
-duplicate (Stack []) = Stack [ItemError EmptyStack1]
-duplicate (Stack s@(x:_)) = Stack (x:s)
+duplicate :: Stack -> Either HuiHuaWarning Stack
+duplicate (Stack []) = Left EmptyStack1
+duplicate (Stack s@(x:_)) = Right (Stack (x:s))
 
-over :: Stack -> Stack
-over (Stack []) = Stack [ItemError EmptyStack1]
-over (Stack [_]) = Stack [ItemError EmptyStack2]
-over (Stack s@(_:x:_)) = Stack (x:s)
+over :: Stack -> Either HuiHuaWarning Stack
+over (Stack []) = Left EmptyStack1
+over (Stack [_]) = Left EmptyStack2
+over (Stack s@(_:x:_)) = Right (Stack (x:s))
 
-flip :: Stack -> Stack
-flip (Stack []) = Stack [ItemError EmptyStack1]
-flip (Stack [_]) = Stack [ItemError EmptyStack2]
-flip (Stack (x:x':xs)) = Stack (x':x:xs)
+flip :: Stack -> Either HuiHuaWarning Stack
+flip (Stack []) = Left EmptyStack1
+flip (Stack [_]) = Left EmptyStack2
+flip (Stack (x:x':xs)) = Right (Stack (x':x:xs))
 
-pop :: Stack -> Stack
-pop (Stack []) = Stack [ItemError EmptyStack1]
-pop (Stack (_:xs)) = Stack xs
+pop :: Stack -> Either HuiHuaWarning Stack
+pop (Stack []) = Left EmptyStack1
+pop (Stack (_:xs)) = Right (Stack xs)
 
 identity :: Stack -> Stack
 identity = id
 
--- >>> :t not
-not :: Item -> Item
-not (ItemArrayInt xs) = ItemArrayInt (fmap (1-) xs)
-not (ItemArrayDouble xs) = ItemArrayDouble (fmap (1-) xs)
-not (ItemFunction _) = ItemError ApplyFunction
-not i@(ItemError _) = i
+unaryOpA :: (Array Int -> Array Int) -> (Array Double -> Array Double) -> Item -> Item
+unaryOpA op _ (ItemArrayInt xs) = ItemArrayInt (op xs)
+unaryOpA _ op (ItemArrayDouble xs) = ItemArrayDouble (op xs)
 
 unaryOp :: (Int -> Int) -> (Double -> Double) -> Item -> Item
 unaryOp op _ (ItemArrayInt xs) = ItemArrayInt (fmap op xs)
 unaryOp _ op (ItemArrayDouble xs) = ItemArrayDouble (fmap op xs)
-unaryOp _ _ (ItemFunction _) = ItemError ApplyFunction
-unaryOp _ _ i@(ItemError _) = i
 
 unaryOpD :: (Double -> Double) -> Item -> Item
 unaryOpD op (ItemArrayInt xs) = ItemArrayDouble (fmap (op . fromIntegral) xs)
 unaryOpD op (ItemArrayDouble xs) = ItemArrayDouble (fmap op xs)
-unaryOpD _ (ItemFunction _) = ItemError ApplyFunction
-unaryOpD _ i@(ItemError _) = i
 
 unaryOpC :: (Double -> Int) -> Item -> Item
 unaryOpC _ i@(ItemArrayInt _) = i
 unaryOpC op (ItemArrayDouble xs) = ItemArrayInt (fmap op xs)
-unaryOpC _ (ItemFunction _) = ItemError ApplyFunction
-unaryOpC _ i@(ItemError _) = i
 
 fromInt :: Item -> Item
 fromInt (ItemArrayInt xs) = ItemArrayDouble (fmap fromIntegral xs)
@@ -130,8 +116,8 @@ fromInt x = x
 
 -- | sign
 --
--- >>> sign (ItemInt 1)
--- ItemInt 1
+-- >>> sign (ItemArrayInt (toScalar 1))
+-- ItemArrayInt 1
 sign :: Item -> Item
 sign = unaryOp signum signum
 
@@ -163,121 +149,97 @@ binArray :: (a -> b -> c) -> Array a -> Array b -> Either HuiHuaWarning (Array c
 binArray op (Array s xs) (Array s' xs') =
   bool (Left SizeMismatch) (Right $ Array s (V.zipWith op xs xs')) (s==s')
 
-binOp :: (Int -> Int -> Int) -> (Double -> Double -> Double) -> Item -> Item -> Item
+binOp :: (Int -> Int -> Int) -> (Double -> Double -> Double) -> Item -> Item -> Either HuiHuaWarning Item
 binOp op _ (ItemArrayInt xs) (ItemArrayInt xs') =
-  either ItemError ItemArrayInt (binArray op xs xs')
+  fmap ItemArrayInt (binArray op xs xs')
 binOp _ op (ItemArrayDouble xs) (ItemArrayDouble xs') =
-    either ItemError ItemArrayDouble (binArray op xs xs')
-binOp _ _ (ItemArrayInt _) _ = ItemError TypeMismatch
-binOp _ _ (ItemArrayDouble _) _ = ItemError TypeMismatch
-binOp _ _ (ItemFunction _) (ItemFunction _) = ItemError TypeMismatch
-binOp _ _ (ItemFunction _) _ = ItemError TypeMismatch
-binOp _ _ _ e@(ItemError _) = e
-binOp _ _ e@(ItemError _) _ = e
+    fmap ItemArrayDouble (binArray op xs xs')
+binOp _ _ (ItemArrayInt _) _ = Left TypeMismatch
+binOp _ _ (ItemArrayDouble _) _ = Left TypeMismatch
 
 -- up type Int to a Double if we have to
-binOpU :: (Int -> Int -> Int) -> (Double -> Double -> Double) -> Item -> Item -> Item
+binOpU :: (Int -> Int -> Int) -> (Double -> Double -> Double) -> Item -> Item -> Either HuiHuaWarning Item
 binOpU op _ (ItemArrayInt xs) (ItemArrayInt xs') =
-  either ItemError ItemArrayInt (binArray op xs xs')
+  fmap ItemArrayInt (binArray op xs xs')
 binOpU _ op (ItemArrayDouble xs) (ItemArrayDouble xs') =
-    either ItemError ItemArrayDouble (binArray op xs xs')
+    fmap ItemArrayDouble (binArray op xs xs')
 binOpU _ op (ItemArrayInt xs) (ItemArrayDouble xs') =
-    either ItemError ItemArrayDouble (binArray op (fmap fromIntegral xs) xs')
+    fmap ItemArrayDouble (binArray op (fmap fromIntegral xs) xs')
 binOpU _ op (ItemArrayDouble xs) (ItemArrayInt xs') =
-    either ItemError ItemArrayDouble (binArray op xs (fmap fromIntegral xs'))
-binOpU _ _ (ItemArrayInt _) _ = ItemError TypeMismatch
-binOpU _ _ (ItemArrayDouble _) _ = ItemError TypeMismatch
-binOpU _ _ (ItemFunction _) (ItemFunction _) = ItemError TypeMismatch
-binOpU _ _ (ItemFunction _) _ = ItemError TypeMismatch
-binOpU _ _ _ e@(ItemError _) = e
-binOpU _ _ e@(ItemError _) _ = e
+    fmap ItemArrayDouble (binArray op xs (fmap fromIntegral xs'))
 
-binOpD :: (Double -> Double -> Double) -> Item -> Item -> Item
+binOpD :: (Double -> Double -> Double) -> Item -> Item -> Either HuiHuaWarning Item
 binOpD op (ItemArrayInt xs) (ItemArrayInt xs') =
-  either ItemError ItemArrayDouble (binArray op (fmap fromIntegral xs) (fmap fromIntegral xs'))
+  fmap ItemArrayDouble (binArray op (fmap fromIntegral xs) (fmap fromIntegral xs'))
 binOpD op (ItemArrayDouble xs) (ItemArrayDouble xs') =
-    either ItemError ItemArrayDouble (binArray op xs xs')
+    fmap ItemArrayDouble (binArray op xs xs')
 binOpD op (ItemArrayInt xs) (ItemArrayDouble xs') =
-  either ItemError ItemArrayDouble (binArray op (fmap fromIntegral xs) xs')
+  fmap ItemArrayDouble (binArray op (fmap fromIntegral xs) xs')
 binOpD op (ItemArrayDouble xs) (ItemArrayInt xs') =
-  either ItemError ItemArrayDouble (binArray op xs (fmap fromIntegral xs'))
-binOpD _ (ItemArrayInt _) _ = ItemError TypeMismatch
-binOpD _ (ItemArrayDouble _) _ = ItemError TypeMismatch
-binOpD _ (ItemFunction _) (ItemFunction _) = ItemError TypeMismatch
-binOpD _ (ItemFunction _) _ = ItemError TypeMismatch
-binOpD _ _ e@(ItemError _) = e
-binOpD _ e@(ItemError _) _ = e
+  fmap ItemArrayDouble (binArray op xs (fmap fromIntegral xs'))
 
 -- down type to Int
-binToInt :: (Int -> Int -> Int) -> (Double -> Double -> Int) -> Item -> Item -> Item
+binToInt :: (Int -> Int -> Int) -> (Double -> Double -> Int) -> Item -> Item -> Either HuiHuaWarning Item
 binToInt op _ (ItemArrayInt xs) (ItemArrayInt xs') =
-  either ItemError ItemArrayInt (binArray op xs xs')
+  fmap ItemArrayInt (binArray op xs xs')
 binToInt _ op (ItemArrayDouble xs) (ItemArrayDouble xs') =
-    either ItemError ItemArrayInt (binArray op xs xs')
+    fmap ItemArrayInt (binArray op xs xs')
 binToInt _ op (ItemArrayInt xs) (ItemArrayDouble xs') =
-    either ItemError ItemArrayInt (binArray op (fmap fromIntegral xs) xs')
+    fmap ItemArrayInt (binArray op (fmap fromIntegral xs) xs')
 binToInt _ op (ItemArrayDouble xs) (ItemArrayInt xs') =
-    either ItemError ItemArrayInt (binArray op xs (fmap fromIntegral xs'))
-binToInt _ _ (ItemArrayInt _) _ = ItemError TypeMismatch
-binToInt _ _ (ItemArrayDouble _) _ = ItemError TypeMismatch
-binToInt _ _ (ItemFunction _) (ItemFunction _) = ItemError TypeMismatch
-binToInt _ _ (ItemFunction _) _ = ItemError TypeMismatch
-binToInt _ _ _ e@(ItemError _) = e
-binToInt _ _ e@(ItemError _) _ = e
+    fmap ItemArrayInt (binArray op xs (fmap fromIntegral xs'))
 
-add :: Item -> Item -> Item
+add :: Item -> Item -> Either HuiHuaWarning Item
 add = binOp (+) (+)
 
-subtract :: Item -> Item -> Item
+subtract :: Item -> Item -> Either HuiHuaWarning Item
 subtract = binOp (-) (-)
 
-multiply :: Item -> Item -> Item
+multiply :: Item -> Item -> Either HuiHuaWarning Item
 multiply = binOp (*) (*)
 
-divide :: Item -> Item -> Item
+divide :: Item -> Item -> Either HuiHuaWarning Item
 divide = binOpD (/)
 
-equals :: Item -> Item -> Item
+equals :: Item -> Item -> Either HuiHuaWarning Item
 equals = binToInt (\x x' -> sig (x==x')) (\x x' -> sig (x==x'))
 
-notequals :: Item -> Item -> Item
+notequals :: Item -> Item -> Either HuiHuaWarning Item
 notequals = binToInt (\x x' -> sig (x/=x')) (\x x' -> sig (x/=x'))
 
-lt :: Item -> Item -> Item
+lt :: Item -> Item -> Either HuiHuaWarning Item
 lt = binToInt (\x x' -> sig (x<x')) (\x x' -> sig (x<x'))
 
-lte :: Item -> Item -> Item
+lte :: Item -> Item -> Either HuiHuaWarning Item
 lte = binToInt (\x x' -> sig (x<=x')) (\x x' -> sig (x<=x'))
 
-gt :: Item -> Item -> Item
+gt :: Item -> Item -> Either HuiHuaWarning Item
 gt = binToInt (\x x' -> sig (x>x')) (\x x' -> sig (x>x'))
 
-gte :: Item -> Item -> Item
+gte :: Item -> Item -> Either HuiHuaWarning Item
 gte = binToInt (\x x' -> sig (x>=x')) (\x x' -> sig (x>=x'))
 
-modulus :: Item -> Item -> Item
+modulus :: Item -> Item -> Either HuiHuaWarning Item
 modulus = binOpU mod (\d n -> n - d * fromIntegral (NumHask.Prelude.floor (n/d)))
 
-power :: Item -> Item -> Item
+power :: Item -> Item -> Either HuiHuaWarning Item
 power = binOpU (\x x' -> NumHask.Prelude.floor ((fromIntegral x :: Double) ^^ x')) (**)
 
-logarithm :: Item -> Item -> Item
+logarithm :: Item -> Item -> Either HuiHuaWarning Item
 logarithm = binOpD (\x x' -> log x' - log x)
 
-minimum :: Item -> Item -> Item
-minimum = binOpU P.min  P.min
+minimum :: Item -> Item -> Either HuiHuaWarning Item
+minimum = binOpU P.min P.min
 
-maximum :: Item -> Item -> Item
-maximum = binOpU P.max  P.max
+maximum :: Item -> Item -> Either HuiHuaWarning Item
+maximum = binOpU P.max P.max
 
-arctangent :: Item -> Item -> Item
+arctangent :: Item -> Item -> Either HuiHuaWarning Item
 arctangent = binOpD atan2
 
 length :: Item -> Item
 length (ItemArrayInt xs) = ItemArrayInt $ toScalar (P.length xs)
 length (ItemArrayDouble xs) = ItemArrayInt $ toScalar (P.length xs)
-length (ItemFunction _) = ItemError TypeMismatch
-length i@(ItemError _) = i
 
 shape :: Item -> Item
 shape (ItemArrayInt xs) = ItemArrayInt $ Array [P.length xs'] (V.fromList xs')
@@ -286,27 +248,21 @@ shape (ItemArrayInt xs) = ItemArrayInt $ Array [P.length xs'] (V.fromList xs')
 shape (ItemArrayDouble xs) = ItemArrayInt $ Array [P.length xs'] (V.fromList xs')
   where
     xs' = NumHask.Array.Dynamic.shape xs
-shape (ItemFunction _) = ItemArrayInt (Array [0] (V.fromList []))
-shape i@(ItemError _) = i
 
 itemCoerceDouble :: Item -> Item
 itemCoerceDouble (ItemArrayInt xs) = ItemArrayDouble (fmap fromIntegral xs)
 itemCoerceDouble x = x
 
-itemCoerceInt :: Item -> Item
-itemCoerceInt (ItemArrayDouble xs) = bool (ItemError NotNat) (ItemArrayInt (fmap P.floor xs)) (all (\x -> x==fromIntegral (P.floor x)) xs)
-itemCoerceInt x = x
+itemCoerceInt :: Item -> Either HuiHuaWarning Item
+itemCoerceInt (ItemArrayDouble xs) = bool (Left NotNat) (Right $ ItemArrayInt (fmap P.floor xs)) (all (\x -> x==fromIntegral (P.floor x)) xs)
+itemCoerceInt x = Right x
 
-range :: Item -> Item
+range :: Item -> Either HuiHuaWarning Item
 -- FIXME: An applicative permute
 -- table couple (fmap (range . ItemInt) xs)
-range (ItemArrayInt _) = ItemError NYI
-range x@(ItemArrayDouble _) = range (itemCoerceInt x)
-range (ItemFunction _) = ItemError NotNat
-range i@(ItemError _) = i
+range (ItemArrayInt _) = Left NYI
+range (ItemArrayDouble _) = undefined -- Right $ range (itemCoerceInt x)
 
-first :: Item -> Item
-first (ItemArrayInt (Array _ xs)) = bool (ItemArrayInt $ toScalar (V.head xs)) (ItemError EmptyArray) (V.empty == xs)
-first (ItemArrayDouble (Array _ xs)) = bool (ItemArrayDouble $ toScalar (V.head xs)) (ItemError EmptyArray) (V.empty == xs)
-first i@(ItemError _) = i
-first _ = ItemError NotArray
+first :: Item -> Either HuiHuaWarning Item
+first (ItemArrayInt (Array _ xs)) = bool (Right $ ItemArrayInt $ toScalar (V.head xs)) (Left EmptyArray) (V.empty == xs)
+first (ItemArrayDouble (Array _ xs)) = bool (Right $ ItemArrayDouble $ toScalar (V.head xs)) (Left EmptyArray) (V.empty == xs)

@@ -79,6 +79,11 @@ import Data.Map.Strict qualified as Map
 import Data.Set qualified as Set
 import Huihua.Warning
 
+-- $setup
+-- >>> :set -XOverloadedStrings
+-- >>> import Huihua.Array as A
+-- >>> import NumHask.Array.Dynamic as D
+
 -- * uiua api
 not :: (Ring a) => Array a -> Array a
 not = fmap (one-)
@@ -256,16 +261,20 @@ couple a a' =
 -- | ⊡
 --
 -- >>> a = (fromFlatList [2,3] [1,2,3,4,5,6]) :: Array Int
--- >>> pick (range . Huihua.Array.shape $ a) a == a
+-- >>> pick (range . fromList1 . Huihua.Array.shape $ a) a == a
 -- True
 --
 -- >>> pick (fromFlatList [2,2] [0, 1, 1, 2]) a
--- [2,6]
+-- [2, 6]
 pick :: Array Int -> Array a -> Array a
 pick i a = fmap (\x -> indexA x a) (extracts [0..(P.length (shape i) - 2)] i)
 
 -- | A.rotate (fromList1 [1]) (A.range (fromList1 [5]))
 -- >>> rotate (fromList1 [1,2]) (fromFlatList [4,5] [0..19])
+-- [[7, 8, 9, 5, 6],
+--  [12, 13, 14, 10, 11],
+--  [17, 18, 19, 15, 16],
+--  [2, 3, 4, 0, 1]]
 rotate :: Array Int -> Array a -> Array a
 rotate r a = rotates (zip [0..] (snd $ toFlatList r)) a
 
@@ -290,18 +299,23 @@ join a a'
 
 -- |
 -- >>> select (fromFlatList [4] [0,1,1,0]) (fromFlatList [4] [2,3,5,7::Int])
+-- [2, 3, 3, 2]
 -- >>> select (fromFlatList [2,2] [0,1,1,0]) (fromFlatList [2,2] [2,3,5,7::Int])
+-- [[[2, 3],
+--   [5, 7]],
+--  [[5, 7],
+--   [2, 3]]]
 select :: Array Int -> Array a -> Array a
 select i a = joins [0..(P.length (shape i) - 1)] $ (\x -> selects [0] [x] a) <$> i
 
 -- |
 -- FIXME: Scalar version
 --
--- >>> Huihua.Array.reshape' (fromList1 [3,2]) (fromList1 [1..5::Int])
+-- >>> Huihua.Array.reshape (fromList1 [3,2]) (fromList1 [1..5::Int])
 -- [[1, 2],
 --  [3, 4],
 --  [5, 1]]
--- >>>  Huihua.Array.reshape' (fromList1 [3,-1]) (fromList1 [1..8::Int])
+-- >>> Huihua.Array.reshape (fromList1 [3,-1]) (fromList1 [1..8::Int])
 -- [[1, 2],
 --  [3, 4],
 --  [5, 6]]
@@ -334,8 +348,11 @@ take i a = takes' i' a
 -- |
 --
 -- >>> Huihua.Array.drop (fromList1 [2]) (fromFlatList [3,3] [0..8::Int])
+-- [[6, 7, 8]]
+--
 -- >>> Huihua.Array.drop (fromList1 [2,2]) (fromFlatList [3,3] [0..8::Int])
 -- [[8]]
+--
 -- Huihua.Array.drop (fromList1 [-2]) (fromFlatList [3,3] [0..8::Int])
 -- [[0, 1, 2]]
 -- FIXME: add squeeze here???

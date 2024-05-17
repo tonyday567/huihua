@@ -57,7 +57,8 @@ import Prelude hiding (replicate)
 
 -- $setup
 -- >>> :set -XTemplateHaskell
--- >>> import MarkupParse.FlatParse
+-- >>> :set -XOverloadedStrings
+-- >>> import Huihua.Parse.FlatParse
 -- >>> import FlatParse.Basic
 
 -- | Run a Parser, throwing away leftovers. Nothing on 'Fail' or 'Err'.

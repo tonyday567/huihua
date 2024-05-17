@@ -21,8 +21,10 @@ import Data.List qualified as List
 -- import Data.Bifunctor
 import Huihua.Stack as S
 import Huihua.Warning
+import Huihua.Array qualified as A
 import Data.ByteString.Char8 qualified as C
 import Data.Text.Encoding (encodeUtf8)
+import Control.Monad
 
 data Glyph =
   Duplicate |
@@ -633,8 +635,6 @@ notOps =
 
 data Assemble = ANotOp Glyph | AOp Glyph | AReduceOp Glyph | AInt Int | AInts [Int] | AArrayOpen | AArrayInt (Array Int) | AArrayDouble (Array Double) | AComment ByteString | AString ByteString | AChar Char | AName String | ADouble Double | ADoubles [Double] | AType | ANYI Token | AError HuiHuaWarning deriving (Eq, Show, Ord, Generic)
 
--- data Token = StringToken ByteString | GlyphToken Glyph | IntToken Int | DoubleToken Double | CharacterToken Char | NameToken String | CommentToken ByteString | TypeToken deriving (Eq, Ord, Show)
-
 assemble :: Token -> [Assemble] -> [Assemble]
 assemble (GlyphToken ArrayRight) as = AArrayOpen:as
 assemble (GlyphToken ArrayLeft) (AArrayOpen:as) = AArrayInt (fromList1 []):as
@@ -663,6 +663,9 @@ assemble t xs = (ANYI t:xs)
 assemblef :: [Token] -> [Assemble]
 assemblef ts = foldl' (P.flip assemble) [] ts
 
+assemble' :: ByteString -> [Assemble]
+assemble' bs = bs & C.lines & fmap (runParser_ tokens) & orderUiua & assemblef & P.reverse
+
 isComment :: Token -> Bool
 isComment (CommentToken _) = True
 isComment _ = False
@@ -670,28 +673,28 @@ isComment _ = False
 orderUiua :: [[Token]] -> [Token]
 orderUiua tss = tss & fmap List.reverse & mconcat & List.filter (P.not . isComment)
 
-compute1 :: Assemble -> Stack -> Stack
+compute1 :: Assemble -> Stack -> Either HuiHuaWarning Stack
 compute1 (AOp Duplicate) s = duplicate s
 compute1 (AOp Over) s = over s
 compute1 (AOp Flip) s = S.flip s
 compute1 (AOp Pop) s = pop s
-compute1 (AOp Identity) s = identity s
-compute1 (AOp _) (Stack []) = Stack [ItemError EmptyStack1]
+compute1 (AOp Identity) s = Right (identity s)
+compute1 (AOp _) (Stack []) = Left EmptyStack1
 compute1 (AOp op) (Stack [x])
-  | isBinaryOp op = Stack [ItemError EmptyStack2]
+  | isBinaryOp op = Left EmptyStack2
   | otherwise = case op of
-    Not -> Stack [S.not x]
-    Length -> Stack [S.length x]
-    _ -> Stack [ItemError NYI]
+    Not -> Right (Stack [unaryOpA A.not A.not x])
+    Length -> Right (Stack [S.length x])
+    _ -> Left NYI
 compute1 (AOp op) (Stack (x:y:xs)) = case op of
-  Not -> Stack (S.not x:y:xs)
-  Length -> Stack (S.length x:y:xs)
-  Divide -> Stack (binOpD (/) y x:xs)
-  _ -> Stack [ItemError NYI]
-compute1 (AArrayInt x) (Stack s) = Stack (ItemArrayInt x:s)
-compute1 (AArrayDouble x) (Stack s) = Stack (ItemArrayDouble x:s)
-compute1 (AReduceOp op) (Stack (ItemArrayInt x:xs)) = Stack $ ItemArrayInt (glyphReduceOp op x):xs
-compute1 _ (Stack s) = Stack (ItemError NYI:s)
+  Not -> Right (Stack (unaryOpA A.not A.not x:y:xs))
+  Length -> Right (Stack (S.length x:y:xs))
+  Divide -> fmap (Stack . (:xs)) (binOpD (/) y x)
+  _ -> Left NYI
+compute1 (AArrayInt x) (Stack s) = Right (Stack (ItemArrayInt x:s))
+compute1 (AArrayDouble x) (Stack s) = Right (Stack (ItemArrayDouble x:s))
+compute1 (AReduceOp op) (Stack (ItemArrayInt x:xs)) = Right (Stack $ ItemArrayInt (glyphReduceOp op x):xs)
+compute1 _ (Stack _) = Left NYI
 
 -- reduces are row-wise (first dimension) reductions
 folds' :: (Array a -> b) -> Array a -> Array b
@@ -733,8 +736,15 @@ diff f a = liftR2_ f (drops' [1] a) (drops' [(P.negate 1)] a)
 reduceBool :: (Ring b) => (a -> a -> Bool) -> Array a -> Array b
 reduceBool f a = fmap (bool zero one . any id) (fold0 (Huihua.Parse.diff f) a)
 
-interp :: ByteString -> Stack
-interp bs = C.lines bs & fmap (runParser_ tokens) & orderUiua & assemblef & (foldr compute1 (Stack []))
+interp_ :: [Assemble] -> Stack
+interp_ as = foldr (\a s -> either (error . show) id (compute1 a s)) (Stack []) as
+
+-- | compute a list of assembleds.
+--
+-- >>> interp (assemble' exPage1)
+-- Right (Stack {stackList = [ItemArrayDouble 4.0]})
+interp :: [Assemble] -> Either HuiHuaWarning Stack
+interp as = foldr (>=>) pure (fmap compute1 as) (Stack [])
 
 -- >>> sequence_ $ C.putStr <$> (ts <> ["\n"])
 -- .,∶;∘¬±¯⌵√○⌊⌈⁅=≠&lt;≤&gt;≥+-×÷◿ⁿₙ↧↥∠⧻△⇡⊢⇌♭⋯⍉⍏⍖⊚⊛⊝□⊔≅⊟⊂⊏⊡↯↙↘↻◫▽⌕∊⊗/∧\∵≡∺⊞⊠⍥⊕⊜⍘⋅⊙∩⊃⊓⍜⍚⬚'?⍣⍤!⎋↬⚂ηπτ∞~_[]{}()¯@$"←|
