@@ -59,6 +59,7 @@ import Data.Distributive (Distributive (..))
 import Data.Functor.Rep
 import Data.Vector qualified as V
 import Huihua.Warning
+import Prettyprinter hiding (equals)
 
 -- $setup
 -- >>> :set -XOverloadedStrings
@@ -67,8 +68,15 @@ import Huihua.Warning
 
 data Item = ItemArrayInt (Array Int) | ItemArrayDouble (Array Double) deriving (Show, Eq)
 
+instance Pretty Item where
+  pretty (ItemArrayInt a) = viaShow a
+  pretty (ItemArrayDouble a) = viaShow a
+
 newtype Stack =
   Stack { stackList :: [Item] } deriving (Show, Eq)
+
+instance Pretty Stack where
+  pretty (Stack xs) = vsep (pretty <$> xs)
 
 push :: Item -> Stack -> Stack
 push i (Stack s) = Stack (i:s)

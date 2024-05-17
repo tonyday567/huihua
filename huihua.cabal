@@ -102,6 +102,7 @@ library
     markup-parse,
     string-interpolate >=0.3 && <0.4,
     text,
+    prettyprinter,
   exposed-modules:
     Huihua.Array
     Huihua.Parse

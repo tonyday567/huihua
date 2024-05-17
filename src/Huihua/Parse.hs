@@ -25,7 +25,16 @@ import Huihua.Array qualified as A
 import Data.ByteString.Char8 qualified as C
 import Data.Text.Encoding (encodeUtf8)
 import Control.Monad
+import Prettyprinter
 
+-- $setup
+-- >>> :set -XOverloadedStrings
+-- >>> import Huihua.Parse as P
+-- >>> import NumHask.Array.Dynamic as A
+--
+
+-- |
+--
 data Glyph =
   Duplicate |
   Over |
@@ -134,6 +143,8 @@ data Glyph =
   Comment
   deriving (Eq, Ord, Show)
 
+-- |
+--
 allTheGlyphs :: [Glyph]
 allTheGlyphs =
   [ Duplicate
@@ -243,122 +254,11 @@ allTheGlyphs =
   , Comment
   ]
 
-glyph :: Parser e Glyph
-glyph =
-  $( switch
-       [|
-         case _ of
-            "." -> pure Duplicate
-            "," -> pure Over
-            "∶" -> pure Flip
-            ";" -> pure Pop
-            "∘" -> pure Identity
-            "¬" -> pure Not
-            "±" -> pure Sign
-            "¯" -> pure Negate
-            "⌵" -> pure AbsoluteValue
-            "√" -> pure Sqrt
-            "○" -> pure Sine
-            "⌊" -> pure Floor
-            "⌈" -> pure Ceiling
-            "⁅" -> pure Round
-            "=" -> pure Equals
-            "≠" -> pure NotEquals
-            "&lt;" -> pure LessThan
-            "≤" -> pure LessOrEqual
-            "&gt;" -> pure GreaterThan
-            "≥" -> pure GreaterOrEqual
-            "+" -> pure Add
-            "-" -> pure Subtract
-            "×" -> pure Multiply
-            "÷" -> pure Divide
-            "◿" -> pure Modulus
-            "ⁿ" -> pure Power
-            "ₙ" -> pure Logarithm
-            "↧" -> pure Minimum
-            "↥" -> pure Maximum
-            "∠" -> pure Atangent
-            "⧻" -> pure Length
-            "△" -> pure Shape
-            "⇡" -> pure Range
-            "⊢" -> pure First
-            "⇌" -> pure Reverse
-            "♭" -> pure Deshape
-            "⋯" -> pure Bits
-            "⍉" -> pure Transpose
-            "⍏" -> pure Rise
-            "⍖" -> pure Fall
-            "⊚" -> pure Where
-            "⊛" -> pure Classify
-            "⊝" -> pure Deduplicate
-            "□" -> pure Box
-            "⊔" -> pure Unbox
-            "≅" -> pure Match
-            "⊟" -> pure Couple
-            "⊂" -> pure Join
-            "⊏" -> pure Select
-            "⊡" -> pure Pick
-            "↯" -> pure Reshape
-            "↙" -> pure Take
-            "↘" -> pure Drop
-            "↻" -> pure Rotate
-            "◫" -> pure Windows
-            "▽" -> pure Keep
-            "⌕" -> pure Find
-            "∊" -> pure Member
-            "⊗" -> pure IndexOf
-            "/" -> pure Reduce
-            "∧" -> pure Fold
-            "\\" -> pure Scan
-            "∵" -> pure Each
-            "≡" -> pure Rows
-            "∺" -> pure Distribute
-            "⊞" -> pure Table
-            "⊠" -> pure Cross
-            "⍥" -> pure Repeat
-            "⊕" -> pure Group
-            "⊜" -> pure Partition
-            "⍘" -> pure Invert
-            "⋅" -> pure Gap
-            "⊙" -> pure Dip
-            "∩" -> pure Both
-            "⊃" -> pure Fork
-            "⊓" -> pure Bracket
-            "⍜" -> pure Under
-            "⍚" -> pure Level
-            "⬚" -> pure Fill
-            "'" -> pure Bind
-            "?" -> pure If
-            "⍣" -> pure Try
-            "⍤" -> pure Assert
-            "!" -> pure Call
-            "⎋" -> pure Break
-            "↬" -> pure Recur
-            "⚂" -> pure Random
-            "η" -> pure Eta
-            "π" -> pure Pi
-            "τ" -> pure Tau
-            "∞" -> pure Infinity
-            "~" -> pure Trace
-            "_" -> pure Strand
-            "[" -> pure ArrayLeft
-            "]" -> pure ArrayRight
-            "{" -> pure BoxArrayLeft
-            "}" -> pure BoxArrayRight
-            "(" -> pure FunctionLeft
-            ")" -> pure FunctionRight
-            -- "¯" -> pure Negative
-            "@" -> pure Format
-            "$" -> pure String
-            "\"" -> pure Binding
-            "←" -> pure Signature
-            "|" -> pure Comment
-           |])
-
+-- |
+--
 data Token = StringToken ByteString | GlyphToken Glyph | IntToken Int | DoubleToken Double | CharacterToken Char | NameToken String | CommentToken ByteString | TypeToken deriving (Eq, Ord, Show)
 
--- |
--- Double token has precedence over duplicate
+-- | Double token has precedence over duplicate
 token :: Parser e Token
 token =
   ((\x -> bool (DoubleToken x) (IntToken (P.floor x)) (x==(fromIntegral . P.floor) x)) <$> double) <|>
@@ -470,6 +370,8 @@ ops =
   , Infinity
   ]
 
+-- |
+--
 nullaryOps :: [Glyph]
 nullaryOps =
   [
@@ -633,6 +535,8 @@ notOps =
   , Comment
  ]
 
+-- |
+--
 data Assemble = ANotOp Glyph | AOp Glyph | AReduceOp Glyph | AInt Int | AInts [Int] | AArrayOpen | AArrayInt (Array Int) | AArrayDouble (Array Double) | AComment ByteString | AString ByteString | AChar Char | AName String | ADouble Double | ADoubles [Double] | AType | ANYI Token | AError HuiHuaWarning deriving (Eq, Show, Ord, Generic)
 
 assemble :: Token -> [Assemble] -> [Assemble]
@@ -663,6 +567,10 @@ assemble t xs = (ANYI t:xs)
 assemblef :: [Token] -> [Assemble]
 assemblef ts = foldl' (P.flip assemble) [] ts
 
+-- |
+--
+-- >>> assemble' exPage1
+-- [AArrayInt [1, 5, 8, 2],AOp Duplicate,AReduceOp Add,AOp Flip,AOp Length,AOp Divide]
 assemble' :: ByteString -> [Assemble]
 assemble' bs = bs & C.lines & fmap (runParser_ tokens) & orderUiua & assemblef & P.reverse
 
@@ -746,11 +654,22 @@ interp_ as = foldr (\a s -> either (error . show) id (compute1 a s)) (Stack []) 
 interp :: [Assemble] -> Either HuiHuaWarning Stack
 interp as = foldr (>=>) pure (fmap compute1 as) (Stack [])
 
+-- |
+--
+-- >>> run exPage1
+-- 4.0
+run :: ByteString -> Doc ann
+run bs = either (error . show) pretty (interp (assemble' bs))
+
 -- >>> sequence_ $ C.putStr <$> (ts <> ["\n"])
 -- .,∶;∘¬±¯⌵√○⌊⌈⁅=≠&lt;≤&gt;≥+-×÷◿ⁿₙ↧↥∠⧻△⇡⊢⇌♭⋯⍉⍏⍖⊚⊛⊝□⊔≅⊟⊂⊏⊡↯↙↘↻◫▽⌕∊⊗/∧\∵≡∺⊞⊠⍥⊕⊜⍘⋅⊙∩⊃⊓⍜⍚⬚'?⍣⍤!⎋↬⚂ηπτ∞~_[]{}()¯@$"←|
 allTheSymbols :: [ByteString]
 allTheSymbols =  [".",",","\226\136\182",";","\226\136\152","\194\172","\194\177","\194\175","\226\140\181","\226\136\154","\226\151\139","\226\140\138","\226\140\136","\226\129\133","=","\226\137\160","&lt;","\226\137\164","&gt;","\226\137\165","+","-","\195\151","\195\183","\226\151\191","\226\129\191","\226\130\153","\226\134\167","\226\134\165","\226\136\160","\226\167\187","\226\150\179","\226\135\161","\226\138\162","\226\135\140","\226\153\173","\226\139\175","\226\141\137","\226\141\143","\226\141\150","\226\138\154","\226\138\155","\226\138\157","\226\150\161","\226\138\148","\226\137\133","\226\138\159","\226\138\130","\226\138\143","\226\138\161","\226\134\175","\226\134\153","\226\134\152","\226\134\187","\226\151\171","\226\150\189","\226\140\149","\226\136\138","\226\138\151","/","\226\136\167","\\","\226\136\181","\226\137\161","\226\136\186","\226\138\158","\226\138\160","\226\141\165","\226\138\149","\226\138\156","\226\141\152","\226\139\133","\226\138\153","\226\136\169","\226\138\131","\226\138\147","\226\141\156","\226\141\154","\226\172\154","'","?","\226\141\163","\226\141\164","!","\226\142\139","\226\134\172","\226\154\130","\206\183","\207\128","\207\132","\226\136\158","~","_","[","]","{","}","(",")","\194\175","@","$","\"","\226\134\144","|","#"]
 
+-- |
+--
+-- >>> either error id (interp (assemble' exPage1))
+--
 exPage1 :: ByteString
 exPage1 = encodeUtf8 [i|
 [1 5 8 2]
@@ -773,3 +692,118 @@ exPage3 = [i|
 ≠@ . \# Mask of non-spaces
 ⊜⊢   \# All first letters
 |]
+
+-- |
+--
+-- >>> 1
+glyph :: Parser e Glyph
+glyph =
+  $( switch
+       [|
+         case _ of
+            "." -> pure Duplicate
+            "," -> pure Over
+            "∶" -> pure Flip
+            ";" -> pure Pop
+            "∘" -> pure Identity
+            "¬" -> pure Not
+            "±" -> pure Sign
+            "¯" -> pure Negate
+            "⌵" -> pure AbsoluteValue
+            "√" -> pure Sqrt
+            "○" -> pure Sine
+            "⌊" -> pure Floor
+            "⌈" -> pure Ceiling
+            "⁅" -> pure Round
+            "=" -> pure Equals
+            "≠" -> pure NotEquals
+            "&lt;" -> pure LessThan
+            "≤" -> pure LessOrEqual
+            "&gt;" -> pure GreaterThan
+            "≥" -> pure GreaterOrEqual
+            "+" -> pure Add
+            "-" -> pure Subtract
+            "×" -> pure Multiply
+            "÷" -> pure Divide
+            "◿" -> pure Modulus
+            "ⁿ" -> pure Power
+            "ₙ" -> pure Logarithm
+            "↧" -> pure Minimum
+            "↥" -> pure Maximum
+            "∠" -> pure Atangent
+            "⧻" -> pure Length
+            "△" -> pure Shape
+            "⇡" -> pure Range
+            "⊢" -> pure First
+            "⇌" -> pure Reverse
+            "♭" -> pure Deshape
+            "⋯" -> pure Bits
+            "⍉" -> pure Transpose
+            "⍏" -> pure Rise
+            "⍖" -> pure Fall
+            "⊚" -> pure Where
+            "⊛" -> pure Classify
+            "⊝" -> pure Deduplicate
+            "□" -> pure Box
+            "⊔" -> pure Unbox
+            "≅" -> pure Match
+            "⊟" -> pure Couple
+            "⊂" -> pure Join
+            "⊏" -> pure Select
+            "⊡" -> pure Pick
+            "↯" -> pure Reshape
+            "↙" -> pure Take
+            "↘" -> pure Drop
+            "↻" -> pure Rotate
+            "◫" -> pure Windows
+            "▽" -> pure Keep
+            "⌕" -> pure Find
+            "∊" -> pure Member
+            "⊗" -> pure IndexOf
+            "/" -> pure Reduce
+            "∧" -> pure Fold
+            "\\" -> pure Scan
+            "∵" -> pure Each
+            "≡" -> pure Rows
+            "∺" -> pure Distribute
+            "⊞" -> pure Table
+            "⊠" -> pure Cross
+            "⍥" -> pure Repeat
+            "⊕" -> pure Group
+            "⊜" -> pure Partition
+            "⍘" -> pure Invert
+            "⋅" -> pure Gap
+            "⊙" -> pure Dip
+            "∩" -> pure Both
+            "⊃" -> pure Fork
+            "⊓" -> pure Bracket
+            "⍜" -> pure Under
+            "⍚" -> pure Level
+            "⬚" -> pure Fill
+            "'" -> pure Bind
+            "?" -> pure If
+            "⍣" -> pure Try
+            "⍤" -> pure Assert
+            "!" -> pure Call
+            "⎋" -> pure Break
+            "↬" -> pure Recur
+            "⚂" -> pure Random
+            "η" -> pure Eta
+            "π" -> pure Pi
+            "τ" -> pure Tau
+            "∞" -> pure Infinity
+            "~" -> pure Trace
+            "_" -> pure Strand
+            "[" -> pure ArrayLeft
+            "]" -> pure ArrayRight
+            "{" -> pure BoxArrayLeft
+            "}" -> pure BoxArrayRight
+            "(" -> pure FunctionLeft
+            ")" -> pure FunctionRight
+            -- "¯" -> pure Negative
+            "@" -> pure Format
+            "$" -> pure String
+            "\"" -> pure Binding
+            "←" -> pure Signature
+            "|" -> pure Comment
+           |])

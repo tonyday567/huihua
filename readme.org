@@ -31,7 +31,11 @@ import Data.ByteString (ByteString)
 import Data.Text.Encoding
 import MarkupParse
 import Data.List qualified as List
+import Prettyprinter hiding (equals)
 #+end_src
+
+#+RESULTS:
+: Ok, five modules loaded.
 
 * token parsing
 
@@ -122,7 +126,7 @@ C.putStr bs
 -- C.lines bs & fmap (runParser tokens)
 -- C.lines bs & fmap (runParser_ tokens) & orderUiua
 C.lines bs & fmap (runParser_ tokens) & orderUiua & assemblef & List.reverse
-s = C.lines bs & fmap (runParser_ tokens) & orderUiua & assemblef & foldr compute1 (Stack [])
+s = C.lines bs & fmap (runParser_ tokens) & orderUiua & assemblef & foldr (\a s -> either (error . show) id (compute1 a s)) (Stack [])
 s
 #+end_src
 
@@ -133,7 +137,7 @@ s
 : ⧻∶  # Length
 : ÷   # Divide
 : [AArrayInt [1, 5, 8, 2],AOp Duplicate,AReduceOp Add,AOp Flip,AOp Length,AOp Divide]
-: Stack {stackList = [4.0]}
+: Stack {stackList = [ItemArrayDouble 4.0]}
 
 shapes are ok ...
 
