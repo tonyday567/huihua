@@ -8,8 +8,8 @@
 
 -- | Arrays with a dynamic shape (shape only known at runtime).
 module Huihua.Array
-  ( -- $usage
-    -- * uiua API
+  (
+    -- * Mirror of uiua API
     not,
     sign,
     negate,
@@ -37,11 +37,8 @@ module Huihua.Array
     minimum,
     maximum,
     arctangent,
-    coerceDouble,
-    coerceInt,
-
     length,
-    shape,
+    shape',
     range,
     first,
     indexA,
@@ -66,6 +63,22 @@ module Huihua.Array
     drop,
 
     reshape,
+
+    addR,
+    subtractR,
+    equalsR,
+    notEqualsR,
+    lessThanR,
+    lessOrEqualR,
+    greaterThanR,
+    greaterOrEqualR,
+    divideR,
+    multiplyR,
+    minimumR,
+    maximumR,
+    modulusR,
+    powerR,
+    logarithmR,
   )
 where
 
@@ -78,6 +91,7 @@ import Data.Ord
 import Data.Map.Strict qualified as Map
 import Data.Set qualified as Set
 import Huihua.Warning
+import Data.Bifunctor qualified as B
 
 -- $setup
 -- >>> :set -XOverloadedStrings
@@ -115,69 +129,63 @@ round = fmap P.round
 sig :: Bool -> Int
 sig = bool zero one
 
-binArray :: (a -> b -> c) -> Array a -> Array b -> Either HuiHuaWarning (Array c)
+binArray :: (a -> b -> c) -> Array a -> Array b -> Either HuihuaWarning (Array c)
 binArray op (Array s xs) (Array s' xs') =
   bool (Left SizeMismatch) (Right $ Array s (V.zipWith op xs xs')) (s==s')
 
-add :: (Additive a) => Array a -> Array a -> Either HuiHuaWarning (Array a)
+add :: (Additive a) => Array a -> Array a -> Either HuihuaWarning (Array a)
 add = binArray (+)
 
-subtract :: (Subtractive a) => Array a -> Array a -> Either HuiHuaWarning (Array a)
+subtract :: (Subtractive a) => Array a -> Array a -> Either HuihuaWarning (Array a)
 subtract = binArray (-)
 
-multiply :: (Multiplicative a) => Array a -> Array a -> Either HuiHuaWarning (Array a)
+multiply :: (Multiplicative a) => Array a -> Array a -> Either HuihuaWarning (Array a)
 multiply = binArray (*)
 
-divide :: (Divisive a) => Array a -> Array a -> Either HuiHuaWarning (Array a)
+divide :: (Divisive a) => Array a -> Array a -> Either HuihuaWarning (Array a)
 divide = binArray (/)
 
-binOpBool :: (a -> a -> Bool) -> Array a -> Array a -> Either HuiHuaWarning (Array Int)
+binOpBool :: (a -> a -> Bool) -> Array a -> Array a -> Either HuihuaWarning (Array Int)
 binOpBool f = binArray (\x x' -> sig (f x x'))
 
-equals :: (Eq a) => Array a -> Array a -> Either HuiHuaWarning (Array Int)
+equals :: (Eq a) => Array a -> Array a -> Either HuihuaWarning (Array Int)
 equals = binOpBool (==)
 
-notequals :: (Eq a) => Array a -> Array a -> Either HuiHuaWarning (Array Int)
+notequals :: (Eq a) => Array a -> Array a -> Either HuihuaWarning (Array Int)
 notequals = binOpBool (/=)
 
-lt :: (Ord a) => Array a -> Array a -> Either HuiHuaWarning (Array Int)
+lt :: (Ord a) => Array a -> Array a -> Either HuihuaWarning (Array Int)
 lt = binOpBool (<)
 
-lte :: (Ord a) => Array a -> Array a -> Either HuiHuaWarning (Array Int)
+lte :: (Ord a) => Array a -> Array a -> Either HuihuaWarning (Array Int)
 lte = binOpBool (<=)
 
-gt :: (Ord a) => Array a -> Array a -> Either HuiHuaWarning (Array Int)
+gt :: (Ord a) => Array a -> Array a -> Either HuihuaWarning (Array Int)
 gt = binOpBool (>)
 
-gte :: (Ord a) => Array a -> Array a -> Either HuiHuaWarning (Array Int)
+gte :: (Ord a) => Array a -> Array a -> Either HuihuaWarning (Array Int)
 gte = binOpBool (>=)
 
-modulus :: (Integral a) => Array a -> Array a -> Either HuiHuaWarning (Array a)
+modulus :: (Integral a) => Array a -> Array a -> Either HuihuaWarning (Array a)
 modulus = binArray mod
 
-modulusD :: (Subtractive a, QuotientField a, Ring (Whole a), FromIntegral a (Whole a)) => Array a -> Array a -> Either HuiHuaWarning (Array a)
+modulusD :: (Subtractive a, QuotientField a, Ring (Whole a), FromIntegral a (Whole a)) => Array a -> Array a -> Either HuihuaWarning (Array a)
 modulusD = binArray (\d n -> n - d * fromIntegral (P.floor (n/d)))
 
-power :: (ExpField a) => Array a -> Array a -> Either HuiHuaWarning (Array a)
+power :: (ExpField a) => Array a -> Array a -> Either HuihuaWarning (Array a)
 power = binArray (**)
 
-logarithm :: (ExpField a) => Array a -> Array a -> Either HuiHuaWarning (Array a)
+logarithm :: (ExpField a) => Array a -> Array a -> Either HuihuaWarning (Array a)
 logarithm = binArray (\x x' -> log x' - log x)
 
-minimum :: (Ord a) => Array a -> Array a -> Either HuiHuaWarning (Array a)
+minimum :: (Ord a) => Array a -> Array a -> Either HuihuaWarning (Array a)
 minimum = binArray P.min
 
-maximum :: (Ord a) => Array a -> Array a -> Either HuiHuaWarning (Array a)
+maximum :: (Ord a) => Array a -> Array a -> Either HuihuaWarning (Array a)
 maximum = binArray P.max
 
-arctangent :: (TrigField a) => Array a -> Array a -> Either HuiHuaWarning (Array a)
+arctangent :: (TrigField a) => Array a -> Array a -> Either HuihuaWarning (Array a)
 arctangent = binArray atan2
-
-coerceDouble :: Array Int -> Array Double
-coerceDouble = fmap fromIntegral
-
-coerceInt :: Array Double -> Either HuiHuaWarning (Array Int)
-coerceInt (Array s xs) = bool (Left NotNat) (Right $ Array s $ fmap P.floor xs) (all (\x -> x==fromIntegral (P.floor x)) xs)
 
 length :: Array a -> Array Int
 length (Array [] _) = Array [] (V.singleton one)
@@ -186,6 +194,11 @@ length (Array (s:_) _) = Array [] (V.singleton s)
 range :: Array Int -> Array Int
 range (Array s xs) =
   squeeze $ tabulate (V.toList xs <> s) (\xs' -> xs' !! last xs')
+
+shape' :: Array a -> Array Int
+shape' a = Array [P.length xs'] (V.fromList xs')
+  where
+    xs' = NumHask.Array.Dynamic.shape a
 
 first :: Array a -> Array a
 first = selects [0] [0]
@@ -215,12 +228,12 @@ bits = fmap bits' >>> joins [0]
 -- >>> keep (fromList1 [1, 0, 2, 3, 1]) (fromList1 [8,3, 9, 2, 3::Int])
 -- FIXME: fix Scalar version
 -- >>> keep (toScalar 4) (fromList1 [1..5])
-keep :: Array Int -> Array a -> Either String (Array a)
-keep k a = fromList1 . fold <$> liftR2 ($) (fmap replicate k) a
+keep :: Array Int -> Array a -> Either HuihuaWarning (Array a)
+keep k a = B.first NumHaskError (fromList1 . fold <$> liftR2 ($) (fmap replicate k) a)
 
 -- >>> where' (fromList1 [1,2,3])
 -- Right [0, 1, 1, 2, 2, 2]
-where' :: Array Int -> Either String (Array Int)
+where' :: Array Int -> Either HuihuaWarning (Array Int)
 where' a = Huihua.Array.length a & range & keep a
 
 classify :: (Ord a) => Array a -> Array Int
@@ -369,3 +382,69 @@ rise a = order $ extracts [0] a
 --- >>> rise (fromList1 [6,2,7,0,-1,5])
 fall :: (Ord a) => Array a -> Array Int
 fall a = orderBy Down $ extracts [0] a
+
+-- reducing operators
+
+folds' :: (Array a -> b) -> Array a -> Array b
+folds' f a = folds f [] a
+
+equalsR :: (Eq a) => Array a -> Array Int
+equalsR = reduceBool (==)
+
+notEqualsR :: (Eq a) => Array a -> Array Int
+notEqualsR = reduceBool (/=)
+
+lessThanR :: (Ord a) => Array a -> Array Int
+lessThanR = reduceBool (<)
+
+lessOrEqualR :: (Ord a) => Array a -> Array Int
+lessOrEqualR = reduceBool (<=)
+
+greaterThanR :: (Ord a) => Array a -> Array Int
+greaterThanR = reduceBool (>)
+
+greaterOrEqualR :: (Ord a) => Array a -> Array Int
+greaterOrEqualR = reduceBool (>=)
+
+reduceBool :: (Ring b) => (a -> a -> Bool) -> Array a -> Array b
+reduceBool f a = fmap (bool zero one . any id) (fold0 (diff' f) a)
+
+diff' :: (a -> a -> b) -> Array a -> Array b
+diff' f a = liftR2_ f (drops' [1] a) (drops' [(P.negate 1)] a)
+
+fold0 :: (Array a -> b) -> Array a -> Array b
+fold0 f a = folds f [0] a
+
+fold1 :: (Array a -> Array a -> Array a) -> Array a -> Array a
+fold1 f (x0:|xs0) = go x0 xs0
+  where
+    go x xs = let (x':|xs') = xs in bool (go (f x x') xs') x (P.null xs)
+
+addR :: (Additive a) => Array a -> Array a
+addR = folds' sum
+
+-- No NumHask instances for dynamic arrays
+subtractR :: (Subtractive (Array a)) => Array a -> Array a
+subtractR = fold1 (-)
+
+divideR :: (Divisive (Array a)) => Array a -> Array a
+divideR = fold1 (/)
+
+multiplyR :: (Multiplicative a) => Array a -> Array a
+multiplyR = folds' product
+
+minimumR :: (Ord a) => Array a -> Array a
+minimumR = fold1 min
+
+maximumR :: (Ord a) => Array a -> Array a
+maximumR = fold1 max
+
+modulusR :: (Integral (Array a)) => Array a -> Array a
+modulusR = fold1 mod
+
+powerR :: (ExpField (Array a)) => Array a -> Array a
+powerR = fold1 (**)
+
+logarithmR :: (ExpField a) => Array a -> Array a
+logarithmR = undefined -- fold1 log
+

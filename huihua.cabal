@@ -105,7 +105,9 @@ library
     prettyprinter,
   exposed-modules:
     Huihua.Array
+    Huihua.ArrayU
     Huihua.Parse
+    Huihua.Glyphs
     Huihua.Parse.FlatParse
     Huihua.Stack
     Huihua.Warning

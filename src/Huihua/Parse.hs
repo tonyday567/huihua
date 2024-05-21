@@ -8,24 +8,21 @@
 
 module Huihua.Parse where
 
-import NumHask.Prelude as P hiding (First, (<|>), null)
-import FlatParse.Basic
+import NumHask.Prelude as P hiding (First, null)
+import FlatParse.Basic as FP
 import Huihua.Parse.FlatParse
--- import MarkupParse qualified as MP
 import Data.String.Interpolate
--- import qualified Data.ByteString as B
 import Data.ByteString (ByteString)
 import NumHask.Array.Dynamic
 import Data.List qualified as List
--- import Data.These
--- import Data.Bifunctor
 import Huihua.Stack as S
+import Huihua.ArrayU
 import Huihua.Warning
-import Huihua.Array qualified as A
 import Data.ByteString.Char8 qualified as C
 import Data.Text.Encoding (encodeUtf8)
 import Control.Monad
 import Prettyprinter
+import Huihua.Glyphs
 
 -- $setup
 -- >>> :set -XOverloadedStrings
@@ -35,238 +32,17 @@ import Prettyprinter
 
 -- |
 --
-data Glyph =
-  Duplicate |
-  Over |
-  Flip |
-  Pop |
-  Identity |
-  Not |
-  Sign |
-  Negate |
-  AbsoluteValue |
-  Sqrt |
-  Sine |
-  Floor |
-  Ceiling |
-  Round |
-  Equals |
-  NotEquals |
-  LessThan |
-  LessOrEqual |
-  GreaterThan |
-  GreaterOrEqual |
-  Add |
-  Subtract |
-  Multiply |
-  Divide |
-  Modulus |
-  Power |
-  Logarithm |
-  Minimum |
-  Maximum |
-  Atangent |
-  Length |
-  Shape |
-  Range |
-  First |
-  Reverse |
-  Deshape |
-  Bits |
-  Transpose |
-  Rise |
-  Fall |
-  Where |
-  Classify |
-  Deduplicate |
-  Box |
-  Unbox |
-  Match |
-  Couple |
-  Join |
-  Select |
-  Pick |
-  Reshape |
-  Take |
-  Drop |
-  Rotate |
-  Windows |
-  Keep |
-  Find |
-  Member |
-  IndexOf |
-  Reduce |
-  Fold |
-  Scan |
-  Each |
-  Rows |
-  Distribute |
-  Table |
-  Cross |
-  Repeat |
-  Group |
-  Partition |
-  Invert |
-  Gap |
-  Dip |
-  Both |
-  Fork |
-  Bracket |
-  Under |
-  Level |
-  Fill |
-  Bind |
-  If |
-  Try |
-  Assert |
-  Call |
-  Break |
-  Recur |
-  Random |
-  Eta |
-  Pi |
-  Tau |
-  Infinity |
-  Trace |
-  Strand |
-  ArrayLeft |
-  ArrayRight |
-  BoxArrayLeft |
-  BoxArrayRight |
-  FunctionLeft |
-  FunctionRight |
-  Negative |
-  Format |
-  String |
-  Binding |
-  Signature |
-  Comment
-  deriving (Eq, Ord, Show)
-
--- |
---
-allTheGlyphs :: [Glyph]
-allTheGlyphs =
-  [ Duplicate
-  , Over
-  , Flip
-  , Pop
-  , Identity
-  , Not
-  , Sign
-  , Negate
-  , AbsoluteValue
-  , Sqrt
-  , Sine
-  , Floor
-  , Ceiling
-  , Round
-  , Equals
-  , NotEquals
-  , LessThan
-  , LessOrEqual
-  , GreaterThan
-  , GreaterOrEqual
-  , Add
-  , Subtract
-  , Multiply
-  , Divide
-  , Modulus
-  , Power
-  , Logarithm
-  , Minimum
-  , Maximum
-  , Atangent
-  , Length
-  , Shape
-  , Range
-  , First
-  , Reverse
-  , Deshape
-  , Bits
-  , Transpose
-  , Rise
-  , Fall
-  , Where
-  , Classify
-  , Deduplicate
-  , Box
-  , Unbox
-  , Match
-  , Couple
-  , Join
-  , Select
-  , Pick
-  , Reshape
-  , Take
-  , Drop
-  , Rotate
-  , Windows
-  , Keep
-  , Find
-  , Member
-  , IndexOf
-  , Reduce
-  , Fold
-  , Scan
-  , Each
-  , Rows
-  , Distribute
-  , Table
-  , Cross
-  , Repeat
-  , Group
-  , Partition
-  , Invert
-  , Gap
-  , Dip
-  , Both
-  , Fork
-  , Bracket
-  , Under
-  , Level
-  , Fill
-  , Bind
-  , If
-  , Try
-  , Assert
-  , Call
-  , Break
-  , Recur
-  , Random
-  , Eta
-  , Pi
-  , Tau
-  , Infinity
-  , Trace
-  , Strand
-  , ArrayLeft
-  , ArrayRight
-  , BoxArrayLeft
-  , BoxArrayRight
-  , FunctionLeft
-  , FunctionRight
-  , Negative
-  , Format
-  , String
-  , Binding
-  , Signature
-  , Comment
-  ]
-
--- |
---
 data Token = StringToken ByteString | GlyphToken Glyph | IntToken Int | DoubleToken Double | CharacterToken Char | NameToken String | CommentToken ByteString | TypeToken deriving (Eq, Ord, Show)
 
 -- | Double token has precedence over duplicate
 token :: Parser e Token
 token =
-  ((\x -> bool (DoubleToken x) (IntToken (P.floor x)) (x==(fromIntegral . P.floor) x)) <$> double) <|>
-  (GlyphToken <$> glyph) <|>
-  (StringToken <$> wrappedDq) <|>
-  (CharacterToken <$> ($(char '@') *> anyChar)) <|>
-  (CommentToken <$> ($(char '#') *> nota '\n')) <|>
-  (NameToken <$> some (satisfy isLatinLetter)) <|>
+  ((\x -> bool (DoubleToken x) (IntToken (P.floor x)) (x==(fromIntegral . P.floor) x)) <$> double) FP.<|>
+  (GlyphToken <$> glyphP) FP.<|>
+  (StringToken <$> wrappedDq) FP.<|>
+  (CharacterToken <$> ($(char '@') *> anyChar)) FP.<|>
+  (CommentToken <$> ($(char '#') *> nota '\n')) FP.<|>
+  (NameToken <$> some (satisfy isLatinLetter)) FP.<|>
   (TypeToken <$ $(string "type"))
 
 tokens :: Parser e [Token]
@@ -275,391 +51,143 @@ tokens = many (ws_ *> token) <* ws_
 tokenize :: ByteString -> Either ByteString [[Token]]
 tokenize bs = runParserEither (many tokens) bs
 
-ops :: [Glyph]
-ops =
-  [ Duplicate
-  , Over
-  , Flip
-  , Pop
-  , Identity
-  , Not
-  , Sign
-  , Negate
-  , AbsoluteValue
-  , Sqrt
-  , Sine
-  , Floor
-  , Ceiling
-  , Round
-  , Equals
-  , NotEquals
-  , LessThan
-  , LessOrEqual
-  , GreaterThan
-  , GreaterOrEqual
-  , Add
-  , Subtract
-  , Multiply
-  , Divide
-  , Modulus
-  , Power
-  , Logarithm
-  , Minimum
-  , Maximum
-  , Atangent
-  , Length
-  , Shape
-  , Range
-  , First
-  , Reverse
-  , Deshape
-  , Bits
-  , Transpose
-  , Rise
-  , Fall
-  , Where
-  , Classify
-  , Deduplicate
-  , Box
-  , Unbox
-  , Match
-  , Couple
-  , Join
-  , Select
-  , Pick
-  , Reshape
-  , Take
-  , Drop
-  , Rotate
-  , Windows
-  , Keep
-  , Find
-  , Member
-  , IndexOf
-  , Reduce
-  , Fold
-  , Scan
-  , Each
-  , Rows
-  , Distribute
-  , Table
-  , Cross
-  , Repeat
-  , Group
-  , Partition
-  , Invert
-  , Gap
-  , Dip
-  , Both
-  , Fork
-  , Bracket
-  , Under
-  , Level
-  , Fill
-  , Bind
-  , If
-  , Try
-  , Assert
-  , Call
-  , Break
-  , Recur
-  , Random
-  , Eta
-  , Pi
-  , Tau
-  , Infinity
-  ]
+aOp :: Assembler Token Glyph
+aOp = Assembler $ \xs -> case xs of
+  (GlyphToken g:xs) -> bool Nothing (Just (g, xs)) (isOperator g)
+  _ -> Nothing
 
--- |
---
-nullaryOps :: [Glyph]
-nullaryOps =
-  [
-    Random
-  , Eta
-  , Pi
-  , Tau
-  , Infinity
-  ]
+aNoOp :: Assembler Token Glyph
+aNoOp = Assembler $ \xs -> case xs of
+  (GlyphToken g:xs) -> bool (Just (g, xs)) Nothing (P.not $ isOperator g)
+  _ -> Nothing
 
-isNullaryOp :: Glyph -> Bool
-isNullaryOp g = g `List.elem` nullaryOps
+aReduce :: Assembler Token ()
+aReduce = Assembler $ \xs -> case xs of
+  (GlyphToken Reduce:xs) -> Just ((), xs)
+  _ -> Nothing
 
-unaryOps :: [Glyph]
-unaryOps =
-  [ Duplicate
-  , Pop
-  , Identity
-  , Not
-  , Sign
-  , Negate
-  , AbsoluteValue
-  , Sqrt
-  , Sine
-  , Floor
-  , Ceiling
-  , Round
-  , Atangent
-  , Length
-  , Shape
-  , Range
-  , First
-  , Reverse
-  , Deshape
-  , Bits
-  , Transpose
-  , Rise
-  , Fall
-  , Where
-  , Classify
-  , Deduplicate
-  , Box
-  , Unbox
-  , Rows
-  ]
+aReduceOp :: Assembler Token Glyph
+aReduceOp = Assembler $ \xs -> case xs of
+  (GlyphToken Reduce:GlyphToken g:xs) -> bool Nothing (Just (g, xs)) (isOperator g)
+  _ -> Nothing
 
-isUnaryOp :: Glyph -> Bool
-isUnaryOp g = g `List.elem` unaryOps
+aComment :: Assembler Token ByteString
+aComment = Assembler $ \xs -> case xs of
+  (CommentToken c:xs) -> Just (c, xs)
+  _ -> Nothing
 
-binaryOps :: [Glyph]
-binaryOps =
-  [
-    Over
-  , Flip
-  , Equals
-  , NotEquals
-  , LessThan
-  , LessOrEqual
-  , GreaterThan
-  , GreaterOrEqual
-  , Add
-  , Subtract
-  , Multiply
-  , Divide
-  , Modulus
-  , Power
-  , Logarithm
-  , Minimum
-  , Maximum
-  , Match
-  , Couple
-  , Join
-  , Select
-  , Pick
-  , Reshape
-  , Take
-  , Drop
-  , Rotate
-  , Windows
-  , Keep
-  , Find
-  , Member
-  , IndexOf
-  ]
+aDouble :: Assembler Token Double
+aDouble = Assembler $ \xs -> case xs of
+  (DoubleToken d:xs) -> Just (d, xs)
+  (IntToken i:xs) -> Just (fromIntegral i, xs)
+  _ -> Nothing
 
-isBinaryOp :: Glyph -> Bool
-isBinaryOp g = g `List.elem` binaryOps
+aInt :: Assembler Token Int
+aInt = Assembler $ \xs -> case xs of
+  (IntToken i:xs) -> Just (i, xs)
+  _ -> Nothing
 
-reduceOps :: [Glyph]
-reduceOps =
-  [
-    Equals
-  , NotEquals
-  , LessThan
-  , LessOrEqual
-  , GreaterThan
-  , GreaterOrEqual
-  , Add
-  , Subtract
-  , Multiply
-  , Divide
-  , Modulus
-  , Power
-  , Logarithm
-  , Minimum
-  , Maximum
-  ]
+aChar :: Assembler Token Char
+aChar = Assembler $ \xs -> case xs of
+  (CharacterToken x:xs) -> Just (x, xs)
+  _ -> Nothing
 
-isReduceOp :: Glyph -> Bool
-isReduceOp op = op `elem` reduceOps
+aString :: Assembler Token ByteString
+aString = Assembler $ \xs -> case xs of
+  (StringToken x:xs) -> Just (x, xs)
+  _ -> Nothing
 
-functionOps :: [Glyph]
-functionOps =
-  [ Reduce
-  , Fold
-  , Scan
-  , Each
-  , Rows
-  , Distribute
-  , Table
-  , Cross
-  , Repeat
-  , Group
-  , Partition
-  , Invert
-  , Gap
-  , Dip
-  , Both
-  , Fork
-  , Bracket
-  , Under
-  , Level
-  , Fill
-  , Bind
-  , If
-  , Try
-  , Assert
-  , Call
-  , Break
-  , Recur
-  ]
+aArrayRight :: Assembler Token ()
+aArrayRight = Assembler $ \xs -> case xs of
+  (GlyphToken ArrayRight:xs) -> Just ((), xs)
+  _ -> Nothing
 
-isFunctionOp :: Glyph -> Bool
-isFunctionOp g = g `List.elem` functionOps
+aArrayLeft :: Assembler Token ()
+aArrayLeft = Assembler $ \xs -> case xs of
+  (GlyphToken ArrayLeft:xs) -> Just ((), xs)
+  _ -> Nothing
 
-notOps :: [Glyph]
-notOps =
-  [ Trace
-  , Strand
-  , ArrayLeft
-  , ArrayRight
-  , BoxArrayLeft
-  , BoxArrayRight
-  , FunctionLeft
-  , FunctionRight
-  , Negative
-  , Format
-  , String
-  , Binding
-  , Signature
-  , Comment
- ]
+aArray :: Assembler Token a -> Assembler Token (Array a)
+aArray a = aArrayLeft *> (fromList1 <$> many a) <* aArrayRight
 
--- |
---
-data Assemble = ANotOp Glyph | AOp Glyph | AReduceOp Glyph | AInt Int | AInts [Int] | AArrayOpen | AArrayInt (Array Int) | AArrayDouble (Array Double) | AComment ByteString | AString ByteString | AChar Char | AName String | ADouble Double | ADoubles [Double] | AType | ANYI Token | AError HuiHuaWarning deriving (Eq, Show, Ord, Generic)
+aToken :: Assembler Token Token
+aToken = Assembler $ \xs -> case xs of
+  (x:xs) -> Just (x, xs)
+  _ -> Nothing
 
-assemble :: Token -> [Assemble] -> [Assemble]
-assemble (GlyphToken ArrayRight) as = AArrayOpen:as
-assemble (GlyphToken ArrayLeft) (AArrayOpen:as) = AArrayInt (fromList1 []):as
-assemble (GlyphToken ArrayLeft) [] = [AError NoOpenArray]
-assemble (GlyphToken ArrayLeft) (AInts xs:as) = AArrayInt (fromList1 (List.reverse xs)):as
-assemble (GlyphToken ArrayLeft) (ADoubles xs:as) = AArrayDouble (fromList1 (List.reverse xs)):as
-assemble (GlyphToken Reduce) (AOp op:as) = bool (AError NotReduceable:as) (AReduceOp op:as) (isReduceOp op)
-assemble (GlyphToken Reduce) as = AError NotReduceable:as
+data Instruction = IOp Glyph | IReduceOp Glyph | IArrayI (Array Int) | IArrayD (Array Double) | INYI Token deriving (Show, Eq)
 
-assemble (GlyphToken g) as =
-  bool
-  ((ANotOp g) : as)
-  ((AOp g) : as)
-  (g `List.elem` ops)
-assemble (IntToken x) [] = [AInt x]
-assemble (IntToken x) (AArrayOpen:as) = (AInts [x]:as)
-assemble (IntToken x) (AInts xs:as) = (AInts (xs<>[x]):as)
-assemble (IntToken x) xs = (AInt x:xs)
-assemble (DoubleToken x) [] = [ADouble x]
-assemble (DoubleToken x) (AArrayOpen:as) = (ADoubles [x]:as)
-assemble (DoubleToken x) (ADoubles xs:as) = (ADoubles (xs<>[x]):as)
-assemble (DoubleToken x) xs = (ADouble x:xs)
-assemble (CommentToken c) xs = (AComment c:xs)
-assemble t xs = (ANYI t:xs)
+aInstruction :: Assembler Token Instruction
+aInstruction =
+  (IReduceOp <$> aReduceOp) P.<|>
+  (IOp <$> aOp) P.<|>
+  (IArrayI <$> aArray aInt) P.<|>
+  (IArrayD <$> aArray aDouble) P.<|>
+  (INYI <$> aToken)
 
-assemblef :: [Token] -> [Assemble]
-assemblef ts = foldl' (P.flip assemble) [] ts
+aInstructions :: Assembler Token [Instruction]
+aInstructions = many aInstruction
 
--- |
---
--- >>> assemble' exPage1
--- [AArrayInt [1, 5, 8, 2],AOp Duplicate,AReduceOp Add,AOp Flip,AOp Length,AOp Divide]
-assemble' :: ByteString -> [Assemble]
-assemble' bs = bs & C.lines & fmap (runParser_ tokens) & orderUiua & assemblef & P.reverse
+instructionize :: [Token] -> [Instruction]
+instructionize ts = fromMaybe [] (fmap fst (assemble aInstructions ts))
+
+parseI :: ByteString -> [Instruction]
+parseI bs = bs & C.lines & fmap (runParser_ tokens) & orderUiua & instructionize
+
+parseT :: ByteString -> [Token]
+parseT bs = bs & C.lines & fmap (runParser_ tokens) & orderUiua
 
 isComment :: Token -> Bool
 isComment (CommentToken _) = True
 isComment _ = False
 
 orderUiua :: [[Token]] -> [Token]
-orderUiua tss = tss & fmap List.reverse & mconcat & List.filter (P.not . isComment)
+orderUiua tss = tss & List.reverse & mconcat & List.filter (P.not . isComment)
 
-compute1 :: Assemble -> Stack -> Either HuiHuaWarning Stack
-compute1 (AOp Duplicate) s = duplicate s
-compute1 (AOp Over) s = over s
-compute1 (AOp Flip) s = S.flip s
-compute1 (AOp Pop) s = pop s
-compute1 (AOp Identity) s = Right (identity s)
-compute1 (AOp _) (Stack []) = Left EmptyStack1
-compute1 (AOp op) (Stack [x])
-  | isBinaryOp op = Left EmptyStack2
-  | otherwise = case op of
-    Not -> Right (Stack [unaryOpA A.not A.not x])
-    Length -> Right (Stack [S.length x])
-    _ -> Left NYI
-compute1 (AOp op) (Stack (x:y:xs)) = case op of
-  Not -> Right (Stack (unaryOpA A.not A.not x:y:xs))
-  Length -> Right (Stack (S.length x:y:xs))
-  Divide -> fmap (Stack . (:xs)) (binOpD (/) y x)
-  _ -> Left NYI
-compute1 (AArrayInt x) (Stack s) = Right (Stack (ItemArrayInt x:s))
-compute1 (AArrayDouble x) (Stack s) = Right (Stack (ItemArrayDouble x:s))
-compute1 (AReduceOp op) (Stack (ItemArrayInt x:xs)) = Right (Stack $ ItemArrayInt (glyphReduceOp op x):xs)
-compute1 _ (Stack _) = Left NYI
+newtype Assembler t a = Assembler { assemble :: [t] -> Maybe (a, [t]) } deriving (Functor)
 
--- reduces are row-wise (first dimension) reductions
-folds' :: (Array a -> b) -> Array a -> Array b
-folds' f a = folds f [] a
+instance Applicative (Assembler t) where
+  pure a = Assembler (\xs -> Just (a,xs))
 
--- reduces are row-wise (first dimension) reductions
-fold0 :: (Array a -> b) -> Array a -> Array b
-fold0 f a = folds f [0] a
+  f <*> a = Assembler $ \xs -> case assemble f xs of
+    Nothing -> Nothing
+    Just (f', xs') -> case (assemble a) xs' of
+      Nothing -> Nothing
+      Just (a', xs'') -> Just (f' a', xs'')
 
-equals :: (Eq a, Ring a) => Array a -> Array a
-equals (x:|xs) = folds (bool zero one . all (==x)) [0] ((extracts [0] xs))
+instance Alternative (Assembler t) where
+  empty = Assembler (const Nothing)
+  (<|>) a b = Assembler $ \xs -> case assemble a xs of
+    Nothing -> assemble b xs
+    Just x -> Just x
 
-fold1 :: (Array a -> Array a -> Array a) -> Array a -> Array a
-fold1 f (x:|xs) = go x xs
-  where
-    go x xs = let (x':|xs') = xs in bool (go (f x x') xs') x (null xs)
+istep :: Instruction -> Stack -> Either HuihuaWarning Stack
+istep (IOp op) s = applyOp op s
+istep (IArrayI x) (Stack s) = Right (Stack (ArrayI x:s))
+istep (IArrayD x) (Stack s) = Right (Stack (ArrayD x:s))
+-- istep (IReduceOp op) (Stack (ArrayI x:xs)) = Right (Stack $ ArrayI undefined (glyphReduceOp op x):xs)
+istep _ (Stack _) = Left NYI
 
-glyphReduceOp :: (Ord a, Ring a) => Glyph -> (Array a -> Array a)
-glyphReduceOp Add = folds' sum
-glyphReduceOp Equals = reduceBool (==)
--- glyphReduceOp Subtract = fold1 (-)
--- glyphReduceOp Divide = fold1 (/)
-glyphReduceOp Multiply = folds' product
-glyphReduceOp NotEquals = reduceBool (/=)
-glyphReduceOp LessThan = reduceBool (<)
-glyphReduceOp LessOrEqual = reduceBool (<=)
-glyphReduceOp GreaterThan = reduceBool (>)
-glyphReduceOp GreaterOrEqual = reduceBool (>=)
-glyphReduceOp Minimum = fold1 min
-glyphReduceOp Maximum = fold1 max
--- glyphReduceOp Modulus = fold1 mod
--- glyphReduceOp Power = fold1 (**)
--- glyphReduceOp Logarithm = fold1 log
-glyphReduceOp _ = error "glyphReduceOp"
-
-diff :: (a -> a -> b) -> Array a -> Array b
-diff f a = liftR2_ f (drops' [1] a) (drops' [(P.negate 1)] a)
-
-reduceBool :: (Ring b) => (a -> a -> Bool) -> Array a -> Array b
-reduceBool f a = fmap (bool zero one . any id) (fold0 (Huihua.Parse.diff f) a)
-
-interp_ :: [Assemble] -> Stack
-interp_ as = foldr (\a s -> either (error . show) id (compute1 a s)) (Stack []) as
-
--- | compute a list of assembleds.
+-- | compute a list of instructions.
 --
--- >>> interp (assemble' exPage1)
+-- >>> interpI (parseI exPage1)
 -- Right (Stack {stackList = [ItemArrayDouble 4.0]})
-interp :: [Assemble] -> Either HuiHuaWarning Stack
-interp as = foldr (>=>) pure (fmap compute1 as) (Stack [])
+interpI :: [Instruction] -> Either HuihuaWarning Stack
+interpI as = foldr (>=>) pure (fmap istep (List.reverse as)) (Stack [])
+
+-- | compute a list of instructions.
+--
+-- >>> interpI (parseI exPage1)
+-- Right (Stack {stackList = [ItemArrayDouble 4.0]})
+interpI_ :: [Instruction] -> Stack
+interpI_ = either (error . show) id . interpI
 
 -- |
 --
 -- >>> run exPage1
 -- 4.0
 run :: ByteString -> Doc ann
-run bs = either (error . show) pretty (interp (assemble' bs))
+run bs = either viaShow pretty (interpI (parseI bs))
 
 -- >>> sequence_ $ C.putStr <$> (ts <> ["\n"])
 -- .,∶;∘¬±¯⌵√○⌊⌈⁅=≠&lt;≤&gt;≥+-×÷◿ⁿₙ↧↥∠⧻△⇡⊢⇌♭⋯⍉⍏⍖⊚⊛⊝□⊔≅⊟⊂⊏⊡↯↙↘↻◫▽⌕∊⊗/∧\∵≡∺⊞⊠⍥⊕⊜⍘⋅⊙∩⊃⊓⍜⍚⬚'?⍣⍤!⎋↬⚂ηπτ∞~_[]{}()¯@$"←|
@@ -696,8 +224,8 @@ exPage3 = [i|
 -- |
 --
 -- >>> 1
-glyph :: Parser e Glyph
-glyph =
+glyphP :: Parser e Glyph
+glyphP =
   $( switch
        [|
          case _ of
@@ -705,7 +233,21 @@ glyph =
             "," -> pure Over
             "∶" -> pure Flip
             ";" -> pure Pop
+            "⟜" -> pure On
+            "⊸" -> pure By
+            "?" -> pure Stack'
+            "⸮" -> pure Trace
+            "dump" -> pure Dump
             "∘" -> pure Identity
+            "⋅" -> pure Gap
+            "⊙" -> pure Dip
+            "∩" -> pure Both
+            "⊃" -> pure Fork
+            "⊓" -> pure Bracket
+            "η" -> pure Eta
+            "π" -> pure Pi
+            "τ" -> pure Tau
+            "∞" -> pure Infinity
             "¬" -> pure Not
             "±" -> pure Sign
             "¯" -> pure Negate
@@ -731,6 +273,7 @@ glyph =
             "↧" -> pure Minimum
             "↥" -> pure Maximum
             "∠" -> pure Atangent
+            "ℂ" -> pure Complex'
             "⧻" -> pure Length
             "△" -> pure Shape
             "⇡" -> pure Range
@@ -744,55 +287,46 @@ glyph =
             "⊚" -> pure Where
             "⊛" -> pure Classify
             "⊝" -> pure Deduplicate
+            "◰" -> pure Unique
             "□" -> pure Box
-            "⊔" -> pure Unbox
             "≅" -> pure Match
             "⊟" -> pure Couple
             "⊂" -> pure Join
             "⊏" -> pure Select
             "⊡" -> pure Pick
             "↯" -> pure Reshape
+            "☇" -> pure Rerank
             "↙" -> pure Take
             "↘" -> pure Drop
             "↻" -> pure Rotate
             "◫" -> pure Windows
             "▽" -> pure Keep
             "⌕" -> pure Find
+            "⦷" -> pure Mask
             "∊" -> pure Member
             "⊗" -> pure IndexOf
+            "⟔" -> pure Coordinate
+            "∵" -> pure Each
+            "≡" -> pure Rows
+            "⊞" -> pure Table
+            "⍚" -> pure Inventory
+            "⍥" -> pure Repeat
+            "⍢" -> pure Do
             "/" -> pure Reduce
             "∧" -> pure Fold
             "\\" -> pure Scan
-            "∵" -> pure Each
-            "≡" -> pure Rows
-            "∺" -> pure Distribute
-            "⊞" -> pure Table
-            "⊠" -> pure Cross
-            "⍥" -> pure Repeat
             "⊕" -> pure Group
             "⊜" -> pure Partition
-            "⍘" -> pure Invert
-            "⋅" -> pure Gap
-            "⊙" -> pure Dip
-            "∩" -> pure Both
-            "⊃" -> pure Fork
-            "⊓" -> pure Bracket
+            "°" -> pure Un
+            "setinv" -> pure Setinv
+            "setund" -> pure Setund
             "⍜" -> pure Under
-            "⍚" -> pure Level
+            "◇" -> pure Content
             "⬚" -> pure Fill
-            "'" -> pure Bind
-            "?" -> pure If
+            "⋕" -> pure Parse
             "⍣" -> pure Try
             "⍤" -> pure Assert
-            "!" -> pure Call
-            "⎋" -> pure Break
-            "↬" -> pure Recur
             "⚂" -> pure Random
-            "η" -> pure Eta
-            "π" -> pure Pi
-            "τ" -> pure Tau
-            "∞" -> pure Infinity
-            "~" -> pure Trace
             "_" -> pure Strand
             "[" -> pure ArrayLeft
             "]" -> pure ArrayRight
@@ -800,10 +334,17 @@ glyph =
             "}" -> pure BoxArrayRight
             "(" -> pure FunctionLeft
             ")" -> pure FunctionRight
+            "⟨" -> pure SwitchLeft
+            "⟩" -> pure SwitchRight
             -- "¯" -> pure Negative
-            "@" -> pure Format
-            "$" -> pure String
-            "\"" -> pure Binding
-            "←" -> pure Signature
-            "|" -> pure Comment
+            "@" -> pure Character
+            "$" -> pure Format
+            "\"" -> pure String
+            "!" -> pure Macro
+            "^" -> pure Placeholder
+            "←" -> pure Binding
+            "↚" -> pure PrivateBinding
+            "~" -> pure Import'
+            "|" -> pure Signature
+            "#" -> pure Comment
            |])
