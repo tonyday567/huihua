@@ -35,6 +35,7 @@ data GlyphCategory = StackG StackOp | ConstantG | OperatorG InputArity OutputAri
 --
 data Glyph =
   -- StackG BasicStack
+  Identity |
   Duplicate |
   Over |
   Flip |
@@ -46,7 +47,6 @@ data Glyph =
   Dump |
 
   -- StackG Planet
-  Identity |
   Gap |
   Dip |
   Both |
@@ -189,7 +189,8 @@ glyphs :: [GlyphDeets]
 glyphs =
   [
   -- StackG BasicStack
-    GlyphDeets Duplicate "." (StackG BasicStack)
+    GlyphDeets Identity "∘" (StackG BasicStack)
+  , GlyphDeets Duplicate "." (StackG BasicStack)
   , GlyphDeets Over "," (StackG BasicStack)
   , GlyphDeets Flip "∶" (StackG BasicStack)
   , GlyphDeets Pop "◌" (StackG BasicStack)
@@ -200,7 +201,6 @@ glyphs =
   , GlyphDeets Dump "dump" (StackG BasicStack)
 
   -- StackG Planet
-  , GlyphDeets Identity "∘" (StackG Planet)
   , GlyphDeets Gap "⋅" (StackG Planet)
   , GlyphDeets Dip "⊙" (StackG Planet)
   , GlyphDeets Both "∩" (StackG Planet)
@@ -336,6 +336,7 @@ glyphs =
 isOperator :: Glyph -> Bool
 isOperator g = case fmap glyphCategory (Map.lookup g glyphM) of
   (Just (OperatorG _ _ _)) -> True
+  (Just (StackG BasicStack)) -> True
   (Just ConstantG) -> True
   _ -> False
 
@@ -353,6 +354,25 @@ isDyadicOp g = case fmap glyphCategory (Map.lookup g glyphM) of
   (Just (OperatorG Dyadic _ _)) -> True
   _ -> False
 
+isStackOp :: Glyph -> Bool
+isStackOp g = case fmap glyphCategory (Map.lookup g glyphM) of
+  (Just (StackG _)) -> True
+  _ -> False
+
+applyStack :: Glyph -> Stack -> Either HuihuaWarning Stack
+applyStack Identity (Stack (x:xs)) = Right (Stack (x:xs))
+applyStack Duplicate (Stack (x:xs)) = Right (Stack (x:x:xs))
+applyStack Over (Stack (x:y:xs)) = Right (Stack (y:x:y:xs))
+applyStack Flip (Stack (x:y:xs)) = Right (Stack (y:x:xs))
+applyStack Pop (Stack (_:xs)) = Right (Stack xs)
+applyStack On _ = Left NYI
+applyStack By _ = Left NYI
+applyStack Stack' _ = Left NYI
+applyStack Trace _ = Left NYI
+applyStack Dump _ = Left NYI
+applyStack _ (Stack []) = Left EmptyStack1
+applyStack _ (Stack [_]) = Left EmptyStack2
+
 applyNonadic :: Glyph -> Res
 applyNonadic Eta = Right $ pure $ ArrayD (toScalar $ 0.5 * pi)
 applyNonadic Pi = Right $ pure $ ArrayD (toScalar pi)
@@ -362,9 +382,6 @@ applyNonadic Random = Left NYI
 applyNonadic _ = Left NYI
 
 applyMonadic :: Glyph -> ArrayU -> Res
-applyMonadic Duplicate x = U.duplicate x
-applyMonadic Pop x = U.pop x
-applyMonadic Identity x = U.identity x
 applyMonadic Not x = U.not x
 applyMonadic Sign x = U.sign x
 applyMonadic Negate x = U.negate x
@@ -389,8 +406,6 @@ applyMonadic Deduplicate x = U.deduplicate x
 applyMonadic _ _ = Left NYI
 
 applyDyadic :: Glyph -> ArrayU -> ArrayU -> Res
-applyDyadic Over x y = Right $ [y,x,y]
-applyDyadic Flip x y = Right $ [y,x]
 applyDyadic Equals x y = lift2IU CoerceToD A.equals A.equals x y
 applyDyadic NotEquals x y = lift2IU CoerceToD A.notequals A.notequals x y
 applyDyadic LessThan x y = lift2IU CoerceToD A.lt A.lt x y
@@ -429,6 +444,7 @@ pushRes _ (Left e) = Left e
 
 applyOp :: Glyph -> Stack -> Either HuihuaWarning Stack
 applyOp g s
+  | isStackOp g = applyStack g s
   | isNonadicOp g = applyNonadic g & pushRes (stackList s)
   | isMonadicOp g = case s of
       (Stack []) -> Left EmptyStack1
@@ -436,8 +452,12 @@ applyOp g s
   | isDyadicOp g = case s of
       (Stack []) -> Left EmptyStack1
       (Stack [_]) -> Left EmptyStack2
-      (Stack (x:y:xs)) -> applyDyadic g x y & pushRes xs
+      (Stack (x:y:xs)) -> applyDyadic g y x & pushRes xs
   | otherwise = Left ApplyNonOperator
+
+applyReduceOp :: Glyph -> Stack -> Either HuihuaWarning Stack
+applyReduceOp _ (Stack []) = Left EmptyStack1
+applyReduceOp g (Stack (x:xs)) = reduceOp g x & pushRes xs
 
 reduceOp :: Glyph -> ArrayU -> Res
 reduceOp Equals x = liftUI (Right . A.equalsR) (Right . A.equalsR) x
@@ -456,3 +476,5 @@ reduceOp Multiply x = liftU (Right . A.multiplyR) (Right . A.multiplyR) x
 reduceOp Minimum x = liftU (Right . A.minimumR) (Right . A.minimumR) x
 reduceOp Maximum x = liftU (Right . A.maximumR) (Right . A.maximumR) x
 reduceOp _ _ = Left NYI
+
+

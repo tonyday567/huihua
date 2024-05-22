@@ -38,10 +38,10 @@ data Token = StringToken ByteString | GlyphToken Glyph | IntToken Int | DoubleTo
 token :: Parser e Token
 token =
   ((\x -> bool (DoubleToken x) (IntToken (P.floor x)) (x==(fromIntegral . P.floor) x)) <$> double) FP.<|>
+  (CharacterToken <$> ($(char '@') *> anyChar)) FP.<|>
+  (CommentToken <$> ($(char '#') *> takeRest)) FP.<|>
   (GlyphToken <$> glyphP) FP.<|>
   (StringToken <$> wrappedDq) FP.<|>
-  (CharacterToken <$> ($(char '@') *> anyChar)) FP.<|>
-  (CommentToken <$> ($(char '#') *> nota '\n')) FP.<|>
   (NameToken <$> some (satisfy isLatinLetter)) FP.<|>
   (TypeToken <$ $(string "type"))
 
@@ -131,18 +131,21 @@ aInstructions = many aInstruction
 instructionize :: [Token] -> [Instruction]
 instructionize ts = fromMaybe [] (fmap fst (assemble aInstructions ts))
 
+-- |
+-- >>> parseI exPage1
+-- [IOp Divide,IOp Length,IOp Flip,IReduceOp Add,IOp Duplicate,IArrayI [1, 5, 8, 2]]
 parseI :: ByteString -> [Instruction]
-parseI bs = bs & C.lines & fmap (runParser_ tokens) & orderUiua & instructionize
+parseI bs = parseT bs & instructionize
 
+-- |
+-- >>> parseT exPage1
+-- [GlyphToken Divide,GlyphToken Length,GlyphToken Flip,GlyphToken Reduce,GlyphToken Add,GlyphToken Duplicate,GlyphToken ArrayLeft,IntToken 1,IntToken 5,IntToken 8,IntToken 2,GlyphToken ArrayRight]
 parseT :: ByteString -> [Token]
-parseT bs = bs & C.lines & fmap (runParser_ tokens) & orderUiua
+parseT bs = bs & C.lines & fmap (runParser_ tokens) & List.reverse & mconcat & filter (P.not . isComment)
 
 isComment :: Token -> Bool
 isComment (CommentToken _) = True
 isComment _ = False
-
-orderUiua :: [[Token]] -> [Token]
-orderUiua tss = tss & List.reverse & mconcat & List.filter (P.not . isComment)
 
 newtype Assembler t a = Assembler { assemble :: [t] -> Maybe (a, [t]) } deriving (Functor)
 
@@ -165,27 +168,27 @@ istep :: Instruction -> Stack -> Either HuihuaWarning Stack
 istep (IOp op) s = applyOp op s
 istep (IArrayI x) (Stack s) = Right (Stack (ArrayI x:s))
 istep (IArrayD x) (Stack s) = Right (Stack (ArrayD x:s))
--- istep (IReduceOp op) (Stack (ArrayI x:xs)) = Right (Stack $ ArrayI undefined (glyphReduceOp op x):xs)
+istep (IReduceOp op) s = applyReduceOp op s
 istep _ (Stack _) = Left NYI
 
--- | compute a list of instructions.
+-- | compute a list of instructions executing from right to left.
 --
 -- >>> interpI (parseI exPage1)
--- Right (Stack {stackList = [ItemArrayDouble 4.0]})
+-- Right (Stack {stackList = [ArrayI 4]})
 interpI :: [Instruction] -> Either HuihuaWarning Stack
 interpI as = foldr (>=>) pure (fmap istep (List.reverse as)) (Stack [])
 
 -- | compute a list of instructions.
 --
 -- >>> interpI (parseI exPage1)
--- Right (Stack {stackList = [ItemArrayDouble 4.0]})
+-- Right (Stack {stackList = [ArrayI 4]})
 interpI_ :: [Instruction] -> Stack
 interpI_ = either (error . show) id . interpI
 
 -- |
 --
 -- >>> run exPage1
--- 4.0
+-- ArrayI 4
 run :: ByteString -> Doc ann
 run bs = either viaShow pretty (interpI (parseI bs))
 

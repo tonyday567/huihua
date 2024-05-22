@@ -274,7 +274,7 @@ couple a a' =
 -- | ⊡
 --
 -- >>> a = (fromFlatList [2,3] [1,2,3,4,5,6]) :: Array Int
--- >>> pick (range . fromList1 . Huihua.Array.shape $ a) a == a
+-- >>> pick (range . Huihua.Array.shape' $ a) a == a
 -- True
 --
 -- >>> pick (fromFlatList [2,2] [0, 1, 1, 2]) a
