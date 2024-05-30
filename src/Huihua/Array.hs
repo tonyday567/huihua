@@ -41,7 +41,6 @@ module Huihua.Array
     shape',
     range,
     first,
-    indexA,
     reverse,
     deshape,
     fix,
@@ -52,7 +51,6 @@ module Huihua.Array
     where',
     classify,
     deduplicate,
-
     couple,
     match,
     pick,
@@ -61,19 +59,24 @@ module Huihua.Array
     select,
     take,
     drop,
-
     reshape,
+    rerankI,
+    rerank,
+    windows,
+    windows',
+    keep,
+    find,
 
-    addR,
-    subtractR,
     equalsR,
     notEqualsR,
     lessThanR,
     lessOrEqualR,
     greaterThanR,
     greaterOrEqualR,
-    divideR,
+    addR,
+    subtractR,
     multiplyR,
+    divideR,
     minimumR,
     maximumR,
     modulusR,
@@ -84,7 +87,7 @@ where
 
 import NumHask.Array.Dynamic
 import Data.Vector qualified as V
-import NumHask.Prelude hiding (not, negate, sqrt, sin, floor, ceiling, round, minimum, maximum, length, reverse, fix, take, drop)
+import NumHask.Prelude hiding (not, negate, sqrt, sin, floor, ceiling, round, minimum, maximum, length, reverse, fix, take, drop, find, diff)
 import NumHask.Prelude qualified as P
 import Data.Bits hiding (rotate)
 import Data.Ord
@@ -92,6 +95,7 @@ import Data.Map.Strict qualified as Map
 import Data.Set qualified as Set
 import Huihua.Warning
 import Data.Bifunctor qualified as B
+import Data.List qualified as List
 
 -- $setup
 -- >>> :set -XOverloadedStrings
@@ -191,9 +195,28 @@ length :: Array a -> Array Int
 length (Array [] _) = Array [] (V.singleton one)
 length (Array (s:_) _) = Array [] (V.singleton s)
 
-range :: Array Int -> Array Int
-range (Array s xs) =
-  squeeze $ tabulate (V.toList xs <> s) (\xs' -> xs' !! last xs')
+-- |
+--
+-- >>>  range (toScalar 3)
+-- Right [0, 1, 2]
+--
+-- >>> range (fromList1 [3])
+-- Right [[0],
+--  [1],
+--  [2]]
+--
+-- >>> range (fromList1 [2,3])
+-- Right [[[0, 0],
+--   [0, 1],
+--   [0, 2]],
+--  [[1, 0],
+--   [1, 1],
+--   [1, 2]]]
+range :: Array Int -> Either HuihuaWarning (Array Int)
+range a
+  | rank a == 0 = Right $ sequent (snd $ toFlatList a)
+  | rank a == 1 = Right $ joins (snd $ toFlatList $ sequent (shape a)) $ fmap fromList1 $ indices (snd $ toFlatList a)
+  | otherwise = Left RankMismatch
 
 shape' :: Array a -> Array Int
 shape' a = Array [P.length xs'] (V.fromList xs')
@@ -202,9 +225,6 @@ shape' a = Array [P.length xs'] (V.fromList xs')
 
 first :: Array a -> Array a
 first = selects [0] [0]
-
-indexA :: Array Int -> Array a -> a
-indexA i a = index a (snd $ toFlatList i)
 
 reverse :: Array a -> Array a
 reverse a = reverses [0] a
@@ -234,7 +254,10 @@ keep k a = B.first NumHaskError (fromList1 . fold <$> liftR2 ($) (fmap replicate
 -- >>> where' (fromList1 [1,2,3])
 -- Right [0, 1, 1, 2, 2, 2]
 where' :: Array Int -> Either HuihuaWarning (Array Int)
-where' a = Huihua.Array.length a & range & keep a
+where' a = do
+  r <- range (length a)
+  w <- keep r a
+  pure w
 
 classify :: (Ord a) => Array a -> Array Int
 classify a = fromList1 $ fst <$> mscan (toList $ extracts [0] a)
@@ -273,14 +296,16 @@ couple a a' =
 
 -- | ⊡
 --
--- >>> a = (fromFlatList [2,3] [1,2,3,4,5,6]) :: Array Int
--- >>> pick (range . Huihua.Array.shape' $ a) a == a
+-- > a = (fromFlatList [2,3] [1,2,3,4,5,6]) :: Array Int
+-- > pick (range . Huihua.Array.shape' $ a) a == a
 -- True
 --
--- >>> pick (fromFlatList [2,2] [0, 1, 1, 2]) a
+-- > pick (fromFlatList [2,2] [0, 1, 1, 2]) a
 -- [2, 6]
 pick :: Array Int -> Array a -> Array a
 pick i a = fmap (\x -> indexA x a) (extracts [0..(P.length (shape i) - 2)] i)
+  where
+    indexA x y = index y (snd $ toFlatList x)
 
 -- | A.rotate (fromList1 [1]) (A.range (fromList1 [5]))
 -- >>> rotate (fromList1 [1,2]) (fromFlatList [4,5] [0..19])
@@ -340,6 +365,18 @@ reshape i a = Array i' (V.take (product i') (V.concat (replicate (1+ product i' 
     i' = bool iflat (fmap (\x -> bool x subDim (x<0)) iflat) hasNeg
     subDim = product (shape a) `div` product (filter (>=0) iflat)
 
+rerankI :: Int -> [Int] -> [Int]
+rerankI r xs = xs'
+  where
+    rold = List.length xs
+    r' = bool r (r + rold) (r<0)
+    xs' = (List.replicate (r' - rold) one) <> (product (List.take (List.length xs - r') xs) : List.drop (List.length xs - r') xs)
+
+rerank :: Array Int -> Array a -> Either HuihuaWarning (Array a)
+rerank r (Array s v)
+  | isScalar r = Left TypeMismatch
+  | otherwise = Right (Array (rerankI (fromScalar r) s) v)
+
 -- |
 --
 -- >>> Huihua.Array.take (fromList1 [2]) (fromFlatList [3,3] [0..8::Int])
@@ -370,7 +407,7 @@ take i a = takes' i' a
 -- [[0, 1, 2]]
 -- FIXME: add squeeze here???
 drop :: Array Int -> Array a -> Array a
-drop i a = drops' i' a
+drop i a = drops i' a
   where
     iflat = snd $ toFlatList i
     i' = bool iflat (iflat <> replicate (P.length (shape a) - P.length iflat) 0) (P.length iflat < P.length (shape a))
@@ -383,11 +420,63 @@ rise a = order $ extracts [0] a
 fall :: (Ord a) => Array a -> Array Int
 fall a = orderBy Down $ extracts [0] a
 
+-- |
+--
+-- maps version of windows
+-- >>> x = fromList2 3 [1..9] :: Array Int
+-- >>> windows (fromList1 [2,2]) x
+-- [[[[1, 2],
+--    [4, 5]],
+--   [[2, 3],
+--    [5, 6]]],
+--  [[[4, 5],
+--    [7, 8]],
+--   [[5, 6],
+--    [8, 9]]]]
+--
+-- FIXME: segfaults on:
+-- windows (toScalar 3) (fromList1 [0..3])
+-- windows (fromList1 [2]) a
+--
+--
+windows' :: Array Int -> Array a -> Either HuihuaWarning (Array a)
+windows' w a = fmap (squeeze . maps (\y -> take w' (drop y a)) [0..(rank a - 1)]) (range (fromList1 s'))
+  where
+    s' = zipWith (-) (shape a) (replicate (rank a - (rank w + 1)) 0 <> replicate (rank w + 1) 1)
+    w' = fromList1 (replicate (rank a - (rank w + 1)) 1 <> (snd $ toFlatList w))
+
+-- |
+-- tabulate version
+-- TODO:
+-- window must be rank 1 or 0
+-- negative window sizes
+windows :: Array Int -> Array a -> Array a
+windows w a = tabulate sh' (index a . fxs)
+  where
+    sh1 = snd $ toFlatList $ take (fromList1 (shape w)) (fromList1 (shape a))
+    sh1' = zipWith (\x y -> x - y + 1) sh1 (snd $ toFlatList w)
+    sh2 = snd $ toFlatList w
+    sh3 = snd $ toFlatList $ drop (fromList1 (shape w)) (fromList1 (shape a))
+    sh' = sh1' <> sh2 <> sh3
+    fxs xs = zipWith (+) (List.take (List.length sh1') xs) (List.take (List.length sh2) (List.drop (List.length sh1') xs)) <> List.drop (List.length sh1' + List.length sh2) xs
+
+-- |
+--
+-- >>> (Right a) = fmap (reshape (fromList1 [4,4])) (range (toScalar 3))
+-- >>> i = fromList1 [1,2]
+-- >>> find i a
+-- Right [[0, 1, 0, 0],
+--  [1, 0, 0, 0],
+--  [0, 0, 1, 0],
+--  [0, 1, 0, 0]]
+find :: (Eq a) => Array a -> Array a -> Either HuihuaWarning (Array Int)
+find i a = do
+    let w = fromList1 (replicate (rank a - rank i) 1 <> shape i)
+    ws <- pure $ windows w a
+    let xs = contract (sig . (== i)) [rank ws - 1] ws
+    pure (reshapeFill (shape a) 0 xs)
+
 -- reducing operators
-
-folds' :: (Array a -> b) -> Array a -> Array b
-folds' f a = folds f [] a
-
 equalsR :: (Eq a) => Array a -> Array Int
 equalsR = reduceBool (==)
 
@@ -407,44 +496,38 @@ greaterOrEqualR :: (Ord a) => Array a -> Array Int
 greaterOrEqualR = reduceBool (>=)
 
 reduceBool :: (Ring b) => (a -> a -> Bool) -> Array a -> Array b
-reduceBool f a = fmap (bool zero one . any id) (fold0 (diff' f) a)
+reduceBool f a = fmap (bool zero one . any id) (folds (diff 1 f) [0] a)
 
-diff' :: (a -> a -> b) -> Array a -> Array b
-diff' f a = liftR2_ f (drops' [1] a) (drops' [(P.negate 1)] a)
+diff :: Int -> (a -> a -> b) -> Array a -> Array b
+diff d f a = liftR2_ f (drops [d] a) (drops [(P.negate d)] a)
 
-fold0 :: (Array a -> b) -> Array a -> Array b
-fold0 f a = folds f [0] a
-
-fold1 :: (Array a -> Array a -> Array a) -> Array a -> Array a
-fold1 f (x0:|xs0) = go x0 xs0
-  where
-    go x xs = let (x':|xs') = xs in bool (go (f x x') xs') x (P.null xs)
+foldU :: (a -> b -> b) -> b -> Array a -> Array b
+foldU f a0 a = fmap (foldl' (flip f) a0) (extracts [1..(rank a - 1)] a)
 
 addR :: (Additive a) => Array a -> Array a
-addR = folds' sum
+addR = foldU (+) zero
 
--- No NumHask instances for dynamic arrays
-subtractR :: (Subtractive (Array a)) => Array a -> Array a
-subtractR = fold1 (-)
+subtractR :: (Subtractive a) => Array a -> Array a
+subtractR = foldU (-) zero
 
-divideR :: (Divisive (Array a)) => Array a -> Array a
-divideR = fold1 (/)
+divideR :: (Divisive a) => Array a -> Array a
+divideR = foldU (/) one
 
 multiplyR :: (Multiplicative a) => Array a -> Array a
-multiplyR = folds' product
+multiplyR = foldU (*) one
 
-minimumR :: (Ord a) => Array a -> Array a
-minimumR = fold1 min
+-- |
+minimumR :: (Ord a, BoundedMeetSemiLattice a) => Array a -> Array a
+minimumR = foldU min top
 
-maximumR :: (Ord a) => Array a -> Array a
-maximumR = fold1 max
+maximumR :: (Ord a, BoundedJoinSemiLattice a) => Array a -> Array a
+maximumR = foldU max bottom
 
-modulusR :: (Integral (Array a)) => Array a -> Array a
-modulusR = fold1 mod
+modulusR :: (Integral a) => Array a -> Array a
+modulusR = foldU mod one
 
-powerR :: (ExpField (Array a)) => Array a -> Array a
-powerR = fold1 (**)
+powerR :: (ExpField a, Multiplicative a) => Array a -> Array a
+powerR = foldU (**) one
 
 logarithmR :: (ExpField a) => Array a -> Array a
-logarithmR = undefined -- fold1 log
-
+logarithmR = foldU logBase one

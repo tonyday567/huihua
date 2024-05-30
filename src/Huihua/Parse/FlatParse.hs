@@ -124,7 +124,8 @@ runParserWarn p bs = case runParser p bs of
 runParser_ :: Parser String a -> ByteString -> a
 runParser_ p bs = case runParser p bs of
   Err e -> error e
-  OK a _ -> a
+  OK a "" -> a
+  OK _ _ -> error "leftovers"
   Fail -> error "uncaught parse error"
 
 -- | Consume whitespace.

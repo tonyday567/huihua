@@ -13,7 +13,6 @@ import NumHask.Prelude as P hiding (First, null, diff)
 import Data.ByteString (ByteString)
 import NumHask.Array.Dynamic
 import Huihua.Warning
-import Huihua.Array as A
 import Huihua.ArrayU as U
 import Huihua.Stack
 
@@ -397,6 +396,7 @@ applyMonadic Range x = U.range x
 applyMonadic First x = U.first x
 applyMonadic Deshape x = U.deshape x
 applyMonadic Bits x = U.bits x
+applyMonadic Fix x = U.fix x
 applyMonadic Transpose x = U.transpose x
 applyMonadic Rise x = U.rise x
 applyMonadic Fall x = U.fall x
@@ -406,36 +406,40 @@ applyMonadic Deduplicate x = U.deduplicate x
 applyMonadic _ _ = Left NYI
 
 applyDyadic :: Glyph -> ArrayU -> ArrayU -> Res
-applyDyadic Equals x y = lift2IU CoerceToD A.equals A.equals x y
-applyDyadic NotEquals x y = lift2IU CoerceToD A.notequals A.notequals x y
-applyDyadic LessThan x y = lift2IU CoerceToD A.lt A.lt x y
-applyDyadic LessOrEqual x y = lift2IU CoerceToD A.lte A.lte x y
-applyDyadic GreaterThan x y = lift2IU CoerceToD A.gt A.gt x y
-applyDyadic GreaterOrEqual x y = lift2IU CoerceToD A.gte A.gte x y
-applyDyadic Add x y = lift2U CoerceToD A.add A.add x y
-applyDyadic Subtract x y = lift2U CoerceToD A.subtract A.subtract x y
-applyDyadic Multiply x y = lift2U CoerceToD A.multiply A.multiply x y
-applyDyadic Divide x y = lift2DU A.divide x y
-applyDyadic Modulus x y = lift2U CoerceToD A.modulus A.modulusD x y
-applyDyadic Power x y = lift2DU A.power x y
-applyDyadic Logarithm x y = lift2DU A.logarithm x y
-applyDyadic Minimum x y = lift2U CoerceToD A.minimum A.minimum x y
-applyDyadic Maximum x y = lift2U CoerceToD A.maximum A.maximum x y
-applyDyadic Atangent x y = lift2DU A.arctangent x y
-applyDyadic Match x y = lift2IU CoerceToD ((Right .) . A.match) ((Right .) . A.match) x y
-applyDyadic Couple x y = lift2U CoerceToD ((Right .) . A.couple) ((Right .) . A.couple) x y
--- FIXME
-applyDyadic Pick _ _ = undefined
-applyDyadic Reshape _ _ = undefined
-applyDyadic Take _ _ = undefined
-applyDyadic Drop _ _ = undefined
-applyDyadic Rotate _ _ = undefined
-applyDyadic Windows _ _ = undefined
-applyDyadic Keep _ _ = undefined
-applyDyadic Find _ _ = undefined
+applyDyadic Equals x y = U.equals x y
+applyDyadic NotEquals x y = U.notequals x y
+applyDyadic LessThan x y = U.lt x y
+applyDyadic LessOrEqual x y = U.lte x y
+applyDyadic GreaterThan x y = U.gt x y
+applyDyadic GreaterOrEqual x y = U.gte x y
+applyDyadic Add x y = U.add x y
+applyDyadic Subtract x y = U.subtract x y
+applyDyadic Multiply x y = U.multiply x y
+applyDyadic Divide x y = U.divide y x
+applyDyadic Modulus x y = U.modulus x y
+applyDyadic Power x y = U.power x y
+applyDyadic Logarithm x y = U.logarithm x y
+applyDyadic Minimum x y = U.minimum x y
+applyDyadic Maximum x y = U.maximum x y
+applyDyadic Atangent x y = U.arctangent x y
+applyDyadic Complex' _ _ = undefined
+applyDyadic Match x y = U.match x y
+applyDyadic Couple x y = U.couple x y
+applyDyadic Join x y = U.join x y
+applyDyadic Select x y = U.select x y
+applyDyadic Pick x y = U.pick x y
+applyDyadic Reshape x y = U.reshape x y
+applyDyadic Rerank x y = U.rerank x y
+applyDyadic Take x y = U.take x y
+applyDyadic Drop x y = U.drop x y
+applyDyadic Rotate x y = U.rotate x y
+applyDyadic Windows x y = U.windows x y
+applyDyadic Keep x y = U.keep x y
+applyDyadic Find x y = U.find x y
+-- FIXME:
+applyDyadic Mask _ _ = undefined
 applyDyadic Member _ _ = undefined
 applyDyadic IndexOf _ _ = undefined
-applyDyadic Table _ _ = undefined
 applyDyadic _ _ _ = Left NYI
 
 pushRes :: [ArrayU] -> Res -> Either HuihuaWarning Stack
@@ -452,7 +456,7 @@ applyOp g s
   | isDyadicOp g = case s of
       (Stack []) -> Left EmptyStack1
       (Stack [_]) -> Left EmptyStack2
-      (Stack (x:y:xs)) -> applyDyadic g y x & pushRes xs
+      (Stack (x:y:xs)) -> applyDyadic g x y & pushRes xs
   | otherwise = Left ApplyNonOperator
 
 applyReduceOp :: Glyph -> Stack -> Either HuihuaWarning Stack
@@ -460,21 +464,21 @@ applyReduceOp _ (Stack []) = Left EmptyStack1
 applyReduceOp g (Stack (x:xs)) = reduceOp g x & pushRes xs
 
 reduceOp :: Glyph -> ArrayU -> Res
-reduceOp Equals x = liftUI (Right . A.equalsR) (Right . A.equalsR) x
-reduceOp NotEquals x = liftUI (Right . A.notEqualsR) (Right . A.notEqualsR) x
-reduceOp LessThan x = liftUI (Right . A.lessThanR) (Right . A.lessThanR) x
-reduceOp LessOrEqual x = liftUI (Right . A.lessOrEqualR) (Right . A.lessOrEqualR) x
-reduceOp GreaterThan x = liftUI (Right . A.greaterThanR) (Right . A.greaterThanR) x
-reduceOp GreaterOrEqual x = liftUI (Right . A.greaterOrEqualR) (Right . A.greaterOrEqualR) x
-reduceOp Add x = liftU (Right . A.addR) (Right . A.addR) x
--- reduceOp Subtract x = liftU (Right . A.subtractR) (Right . A.subtractR) x
-reduceOp Multiply x = liftU (Right . A.multiplyR) (Right . A.multiplyR) x
--- reduceOp Divide x = liftU (Right . A.divideR) (Right . A.divideR) x
--- reduceOp Modulus x = liftU (Right . A.modulusR) (Right . A.modulusR) x
--- reduceOp Power x = liftU (Right . A.powerR) (Right . A.powerR) x
--- reduceOp Logarithm x = liftU (Right . A.logarithmR) (Right . A.logarithmR) x
-reduceOp Minimum x = liftU (Right . A.minimumR) (Right . A.minimumR) x
-reduceOp Maximum x = liftU (Right . A.maximumR) (Right . A.maximumR) x
+reduceOp Equals x = U.equalsR x
+reduceOp NotEquals x = U.notEqualsR x
+reduceOp LessThan x = U.lessThanR x
+reduceOp LessOrEqual x = U.lessOrEqualR x
+reduceOp GreaterThan x = U.greaterThanR x
+reduceOp GreaterOrEqual x = U.greaterOrEqualR x
+reduceOp Add x = U.addR x
+reduceOp Subtract x = U.subtractR x
+reduceOp Multiply x = U.multiplyR x
+reduceOp Divide x = U.divideR x
+reduceOp Modulus x = U.modulusR x
+reduceOp Power x = U.powerR x
+reduceOp Logarithm x = U.logarithmR x
+reduceOp Minimum x = U.minimumR x
+reduceOp Maximum x = U.maximumR x
 reduceOp _ _ = Left NYI
 
 

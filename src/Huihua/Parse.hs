@@ -28,7 +28,7 @@ import Huihua.Glyphs
 -- >>> :set -XOverloadedStrings
 -- >>> import Huihua.Parse as P
 -- >>> import NumHask.Array.Dynamic as A
---
+-- >>> import Data.List qualified as List
 
 -- |
 --
@@ -50,6 +50,23 @@ tokens = many (ws_ *> token) <* ws_
 
 tokenize :: ByteString -> Either ByteString [[Token]]
 tokenize bs = runParserEither (many tokens) bs
+
+newtype Assembler t a = Assembler { assemble :: [t] -> Maybe (a, [t]) } deriving (Functor)
+
+instance Applicative (Assembler t) where
+  pure a = Assembler (\xs -> Just (a,xs))
+
+  f <*> a = Assembler $ \xs -> case assemble f xs of
+    Nothing -> Nothing
+    Just (f', xs') -> case (assemble a) xs' of
+      Nothing -> Nothing
+      Just (a', xs'') -> Just (f' a', xs'')
+
+instance Alternative (Assembler t) where
+  empty = Assembler (const Nothing)
+  (<|>) a b = Assembler $ \xs -> case assemble a xs of
+    Nothing -> assemble b xs
+    Just x -> Just x
 
 aOp :: Assembler Token Glyph
 aOp = Assembler $ \xs -> case xs of
@@ -107,8 +124,16 @@ aArrayLeft = Assembler $ \xs -> case xs of
   (GlyphToken ArrayLeft:xs) -> Just ((), xs)
   _ -> Nothing
 
+aStrand :: Assembler Token ()
+aStrand = Assembler $ \xs -> case xs of
+  (GlyphToken Strand:xs) -> Just ((), xs)
+  _ -> Nothing
+
 aArray :: Assembler Token a -> Assembler Token (Array a)
 aArray a = aArrayLeft *> (fromList1 <$> many a) <* aArrayRight
+
+aArrayStrand :: Assembler Token a -> Assembler Token (Array a)
+aArrayStrand a = (fmap fromList1 . (:)) <$> a <*> (some (aStrand *> a))
 
 aToken :: Assembler Token Token
 aToken = Assembler $ \xs -> case xs of
@@ -123,6 +148,8 @@ aInstruction =
   (IOp <$> aOp) P.<|>
   (IArrayI <$> aArray aInt) P.<|>
   (IArrayD <$> aArray aDouble) P.<|>
+  (IArrayI <$> aArrayStrand aInt) P.<|>
+  (IArrayD <$> aArrayStrand aDouble) P.<|>
   (INYI <$> aToken)
 
 aInstructions :: Assembler Token [Instruction]
@@ -147,23 +174,6 @@ isComment :: Token -> Bool
 isComment (CommentToken _) = True
 isComment _ = False
 
-newtype Assembler t a = Assembler { assemble :: [t] -> Maybe (a, [t]) } deriving (Functor)
-
-instance Applicative (Assembler t) where
-  pure a = Assembler (\xs -> Just (a,xs))
-
-  f <*> a = Assembler $ \xs -> case assemble f xs of
-    Nothing -> Nothing
-    Just (f', xs') -> case (assemble a) xs' of
-      Nothing -> Nothing
-      Just (a', xs'') -> Just (f' a', xs'')
-
-instance Alternative (Assembler t) where
-  empty = Assembler (const Nothing)
-  (<|>) a b = Assembler $ \xs -> case assemble a xs of
-    Nothing -> assemble b xs
-    Just x -> Just x
-
 istep :: Instruction -> Stack -> Either HuihuaWarning Stack
 istep (IOp op) s = applyOp op s
 istep (IArrayI x) (Stack s) = Right (Stack (ArrayI x:s))
@@ -173,24 +183,17 @@ istep _ (Stack _) = Left NYI
 
 -- | compute a list of instructions executing from right to left.
 --
--- >>> interpI (parseI exPage1)
+-- >>> interpI (List.reverse $ parseI exPage1)
 -- Right (Stack {stackList = [ArrayI 4]})
 interpI :: [Instruction] -> Either HuihuaWarning Stack
-interpI as = foldr (>=>) pure (fmap istep (List.reverse as)) (Stack [])
-
--- | compute a list of instructions.
---
--- >>> interpI (parseI exPage1)
--- Right (Stack {stackList = [ArrayI 4]})
-interpI_ :: [Instruction] -> Stack
-interpI_ = either (error . show) id . interpI
+interpI as = foldr (>=>) pure (fmap istep as) (Stack [])
 
 -- |
 --
 -- >>> run exPage1
 -- ArrayI 4
 run :: ByteString -> Doc ann
-run bs = either viaShow pretty (interpI (parseI bs))
+run bs = either viaShow pretty (interpI (List.reverse $ parseI bs))
 
 -- >>> sequence_ $ C.putStr <$> (ts <> ["\n"])
 -- .,∶;∘¬±¯⌵√○⌊⌈⁅=≠&lt;≤&gt;≥+-×÷◿ⁿₙ↧↥∠⧻△⇡⊢⇌♭⋯⍉⍏⍖⊚⊛⊝□⊔≅⊟⊂⊏⊡↯↙↘↻◫▽⌕∊⊗/∧\∵≡∺⊞⊠⍥⊕⊜⍘⋅⊙∩⊃⊓⍜⍚⬚'?⍣⍤!⎋↬⚂ηπτ∞~_[]{}()¯@$"←|
@@ -199,16 +202,20 @@ allTheSymbols =  [".",",","\226\136\182",";","\226\136\152","\194\172","\194\177
 
 -- |
 --
--- >>> either error id (interp (assemble' exPage1))
+-- >>> run exPage1
 --
 exPage1 :: ByteString
 exPage1 = encodeUtf8 [i|
 [1 5 8 2]
 /+. \# Sum
-⧻∶  \# Length
+⧻:  \# Length
 ÷   \# Divide
 |]
 
+-- |
+--
+-- >>> run exPage2
+--
 exPage2 :: ByteString
 exPage2 = encodeUtf8 [i|
 2_3_4
@@ -217,6 +224,13 @@ exPage2 = encodeUtf8 [i|
 ↯:  \# Reshape
 |]
 
+-- | character arrays not yet implemented.
+--
+-- > run exPage3
+--
+-- FIXME: fix glyphtoken string
+-- >>> exPage3 & C.lines & fmap (runParser tokens)
+-- [OK [] "",OK [GlyphToken String,NameToken "Unabashedly",NameToken "I",NameToken "utilize",NameToken "arrays",GlyphToken String] "",OK [GlyphToken NotEquals,CharacterToken ' ',GlyphToken Duplicate,CommentToken " Mask of non-spaces"] "",OK [GlyphToken Partition,GlyphToken First,CommentToken " All first letters"] ""]
 exPage3 :: ByteString
 exPage3 = [i|
 "Unabashedly I utilize arrays"
@@ -226,7 +240,6 @@ exPage3 = [i|
 
 -- |
 --
--- >>> 1
 glyphP :: Parser e Glyph
 glyphP =
   $( switch
@@ -234,7 +247,7 @@ glyphP =
          case _ of
             "." -> pure Duplicate
             "," -> pure Over
-            "∶" -> pure Flip
+            ":" -> pure Flip
             ";" -> pure Pop
             "⟜" -> pure On
             "⊸" -> pure By
