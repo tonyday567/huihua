@@ -106,6 +106,7 @@ library
   exposed-modules:
     Huihua.Array
     Huihua.ArrayU
+    Huihua.Examples
     Huihua.Parse
     Huihua.Glyphs
     Huihua.Parse.FlatParse
