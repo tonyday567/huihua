@@ -6,7 +6,9 @@
 {-# OPTIONS_GHC -fno-warn-incomplete-uni-patterns #-}
 {-# OPTIONS_GHC -Wno-x-partial #-}
 
--- | Unification of Double and Int Arrays, together with coertion logic.
+-- | Compatability layer between NumHask.Dynamic.Array and uiua arrays.
+--
+-- Unlike uiua, this layer distinguishes between Int and Double arrays.
 module Huihua.ArrayU
   ( -- $usage
 
@@ -109,12 +111,15 @@ import Data.Bifunctor qualified as Bi
 -- >>> import Huihua.Array as A
 -- >>> import NumHask.Array.Dynamic as D
 
--- |
+-- | A sum type wrapper for a NumHask.Dynamic.Array, distinguishing between Int and Double arrays
 data ArrayU = ArrayI (Array Int) | ArrayD (Array Double) deriving (Show, Eq)
 
 instance Pretty ArrayU where
   pretty = viaShow
 
+-- | convert an Array Int to an Array Double
+--
+-- >>> coerceToD
 coerceToD :: Array Int -> Array Double
 coerceToD = fmap fromIntegral
 
