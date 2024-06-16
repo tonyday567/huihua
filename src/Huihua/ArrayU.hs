@@ -99,7 +99,7 @@ module Huihua.ArrayU
 where
 
 import Huihua.Array qualified as A
-import NumHask.Array.Dynamic hiding (transpose)
+import NumHask.Array.Dynamic (Array (..))
 import NumHask.Prelude hiding (not, negate, sqrt, sin, floor, ceiling, round, minimum, maximum, length, reverse, fix, take, drop, find)
 import NumHask.Prelude qualified as P
 import Huihua.Warning
@@ -115,11 +115,11 @@ import Data.Bifunctor qualified as Bi
 data ArrayU = ArrayI (Array Int) | ArrayD (Array Double) deriving (Show, Eq)
 
 instance Pretty ArrayU where
-  pretty = viaShow
+  pretty (ArrayI a) = pretty "ArrayI" <+> pretty a
+  pretty (ArrayD a) = pretty "ArrayD" <+> pretty a
 
 -- | convert an Array Int to an Array Double
 --
--- >>> coerceToD
 coerceToD :: Array Int -> Array Double
 coerceToD = fmap fromIntegral
 
@@ -127,7 +127,10 @@ coerceToI :: Array Double -> Array Int
 coerceToI = fmap (fromIntegral . P.floor)
 
 coerceToExactI :: Array Double -> Either HuihuaWarning (Array Int)
-coerceToExactI (Array s xs) = bool (Left NotNat) (Right $ Array s $ fmap P.floor xs) (all (\x -> x==fromIntegral (P.floor x)) xs)
+coerceToExactI a = bool (Left NotNat) (Right aInt) isExact
+  where
+    aInt = fmap P.floor a
+    isExact = (all (\x -> x==fromIntegral (P.floor x)) a)
 
 coerceIfExactI :: ArrayU -> ArrayU
 coerceIfExactI (ArrayD a) = bool (ArrayD a) (ArrayI (coerceToI a)) (all (\x -> x==fromIntegral (P.floor x)) a)
@@ -184,14 +187,14 @@ length (ArrayI a) = Right . pure . ArrayI . A.length $ a
 length (ArrayD a) = Right . pure . ArrayI . A.length $ a
 
 shape' :: ArrayU -> Res
-shape' (ArrayI a) = Right . pure . ArrayI . A.shape' $ a
-shape' (ArrayD a) = Right . pure . ArrayI . A.shape' $ a
+shape' (ArrayI a) = Right . pure . ArrayI . A.shape $ a
+shape' (ArrayD a) = Right . pure . ArrayI . A.shape $ a
 
 range :: ArrayU -> Res
-range (ArrayI a) = fmap (pure . ArrayI) . A.range $ a
+range (ArrayI a) = Right . pure . ArrayI . A.range $ a
 range (ArrayD a) = do
   a' <- coerceToExactI a
-  r <- A.range a'
+  r <- pure $ A.range a'
   pure (pure . ArrayI $ r)
 
 first :: ArrayU -> Res
@@ -227,10 +230,10 @@ fall (ArrayI a) = Right . pure . ArrayI . A.fall $ a
 fall (ArrayD a) = Right . pure . ArrayI . A.fall $ a
 
 where' :: ArrayU -> Res
-where' (ArrayI a) = fmap (pure . ArrayI) $ A.where' a
+where' (ArrayI a) = Right . pure . ArrayI . A.where' $ a
 where' (ArrayD a) = do
   i <- coerceToExactI a
-  a' <- A.where' i
+  a' <- pure $ A.where' i
   pure (pure . ArrayI $ a')
 
 classify :: ArrayU -> Res
@@ -417,22 +420,22 @@ windows (ArrayD x) (ArrayI y) = do
   pure (pure . ArrayI $ r)
 
 keep :: ArrayU -> ArrayU -> Res
-keep (ArrayI x) (ArrayI y) = fmap (pure . ArrayI) (A.keep x y)
+keep (ArrayI x) (ArrayI y) = Right . pure . ArrayI $ (A.keep x y)
 keep (ArrayD x) (ArrayD y) = do
   x' <- coerceToExactI x
-  a' <- A.keep x' y
+  a' <- pure $ A.keep x' y
   pure (pure . ArrayD $ a')
-keep (ArrayI x) (ArrayD y) = fmap (pure . ArrayD) (A.keep x y)
+keep (ArrayI x) (ArrayD y) = Right . pure . ArrayD $ (A.keep x y)
 keep (ArrayD x) (ArrayI y) = do
   x' <- coerceToExactI x
-  a' <- A.keep x' y
+  a' <- pure $ A.keep x' y
   pure (pure . ArrayI $ a')
 
 find:: ArrayU -> ArrayU -> Res
-find (ArrayI x) (ArrayI y) = fmap (pure . ArrayI) $ A.find x y
-find (ArrayD x) (ArrayD y) = fmap (pure . ArrayI) $ A.find x y
-find (ArrayI x) (ArrayD y) = fmap (pure . ArrayI) $ A.find (coerceToD x) y
-find (ArrayD x) (ArrayI y) = fmap (pure . ArrayI) $ A.find x (coerceToD y)
+find (ArrayI x) (ArrayI y) = Right . pure . ArrayI $ A.find x y
+find (ArrayD x) (ArrayD y) = Right . pure . ArrayI $ A.find x y
+find (ArrayI x) (ArrayD y) = Right . pure . ArrayI $ A.find (coerceToD x) y
+find (ArrayD x) (ArrayI y) = Right . pure . ArrayI $ A.find x (coerceToD y)
 
 equalsR :: ArrayU -> Res
 equalsR (ArrayI x) = Right $ pure $ ArrayI $ A.equalsR x

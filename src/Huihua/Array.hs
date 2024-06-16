@@ -45,7 +45,7 @@ module Huihua.Array
     deshape,
     fix,
     bits,
-    -- transpose,
+    transpose,
     rise,
     fall,
     where',
@@ -100,6 +100,7 @@ import Data.List qualified as List
 -- >>> :set -XOverloadedStrings
 -- >>> import Huihua.Array as A
 -- >>> import NumHask.Array.Dynamic as D
+-- >>> import Prettyprinter
 
 -- * uiua api
 not :: (Ring a) => Array a -> Array a
@@ -223,6 +224,8 @@ bits' x =
 bits :: Array Int -> Array Int
 bits = fmap bits' >>> D.joins [0]
 
+transpose :: Array a -> Array a
+transpose = D.transpose
 
 -- >>> keep (fromList1 [1, 0, 2, 3, 1]) (fromList1 [8,3, 9, 2, 3::Int])
 -- FIXME: fix Scalar version
@@ -263,16 +266,16 @@ match :: (Eq a) => Array a -> Array a -> Array Int
 match a a' = D.asArray [bool 0 1 (a==a')]
 
 -- |
--- >>> couple (D.asArray [1,2,3]) (D.asArray [4,5,6::Int])
--- [[1, 2, 3],
---  [4, 5, 6]]
+-- >>> pretty $ couple (D.asArray [1,2,3]) (D.asArray [4,5,6::Int])
+-- [[1,2,3],
+--  [4,5,6]]
 couple :: Array a -> Array a -> Array a
 couple a a' =
   D.concatenate 0 (D.reshape (1:D.shape a) a) (D.reshape (1:D.shape a') a')
 
 -- | ⊡
 --
--- > a = (fromFlatList [2,3] [1,2,3,4,5,6]) :: Array Int
+-- > a = (array [2,3] [1,2,3,4,5,6]) :: Array Int
 -- > pick (range . Huihua.Array.shape' $ a) a == a
 -- True
 --
@@ -284,55 +287,53 @@ pick i a = fmap (\x -> indexA x a) (D.extracts [0..(D.rank i) - 2] i)
     indexA x y = D.index y x
 
 -- | A.rotate (D.asArray [1]) (A.range (D.asArray [5]))
--- >>> rotate (D.asArray [1,2]) (fromFlatList [4,5] [0..19])
--- [[7, 8, 9, 5, 6],
---  [12, 13, 14, 10, 11],
---  [17, 18, 19, 15, 16],
---  [2, 3, 4, 0, 1]]
+-- >>> pretty $ rotate (asArray [1,2]) (array [4,5] [0..19])
+-- [[7,8,9,5,6],
+--  [12,13,14,10,11],
+--  [17,18,19,15,16],
+--  [2,3,4,0,1]]
 rotate :: Array Int -> Array a -> Array a
 rotate r a = D.rotates (P.zip [0..] (D.arrayAs r)) a
 
 -- |
--- >>> join (fromFlatList [2] [1,2]) (fromFlatList [2,2] [5,6,7,8::Int])
--- Right [[1, 2],
---  [5, 6],
---  [7, 8]]
+-- >>> A.join (array [2] [1,2]) (array [2,2] [5,6,7,8::Int])
+-- Right (UnsafeArray [3,2] [1,2,5,6,7,8])
 join :: Array a -> Array a -> Either String (Array a)
 join a a'
   | P.drop 1 (D.shape a) == P.drop 1 (D.shape a') = Right $ D.concatenate 0 a a'
   | D.shape a == P.drop 1 (D.shape a') = Right $ D.concatenate 0 (D.reshape (1:D.shape a) a) a'
   | P.drop 1 (D.shape a) == D.shape a' = Right $ D.concatenate 0 a (D.reshape (1:D.shape a') a')
   | otherwise = Left "Shape Mismatch"
--- (\x -> selects [0] [x] (fromFlatList [2,2] [5,6,7,8::Int])) <$> [1,0]
+-- (\x -> selects [0] [x] (array [2,2] [5,6,7,8::Int])) <$> [1,0]
 -- [[7, 8],[5, 6]]
--- (\x -> selects [0] [x] (fromFlatList [4] [5,6,7,8::Int])) <$> [1,0]
---  joins [0] $ (\x -> selects [0] [x] (fromFlatList [4] [2,3,5,7::Int])) <$> (fromFlatList [3,2] [0,1,1,2,2,3])
--- joins [0] $ (\x -> selects [0] [x] (fromFlatList [3,3] [1..9::Int])) <$> (fromFlatList [4] [0,2,1,1])
--- a2 = joins [0,1] ((\x -> selects [0] [x] (fromFlatList [2,2] [2,3,5,7::Int])) <$> (fromFlatList [2,2] [0,1,1,0]))
- -- a1 = joins [0] $ (\x -> selects [0] [x] (fromFlatList [4] [2,3,5,7::Int])) <$> (fromFlatList [4] [0,1,1,0])
+-- (\x -> selects [0] [x] (array [4] [5,6,7,8::Int])) <$> [1,0]
+--  joins [0] $ (\x -> selects [0] [x] (array [4] [2,3,5,7::Int])) <$> (array [3,2] [0,1,1,2,2,3])
+-- joins [0] $ (\x -> selects [0] [x] (array [3,3] [1..9::Int])) <$> (array [4] [0,2,1,1])
+-- a2 = joins [0,1] ((\x -> selects [0] [x] (array [2,2] [2,3,5,7::Int])) <$> (array [2,2] [0,1,1,0]))
+ -- a1 = joins [0] $ (\x -> selects [0] [x] (array [4] [2,3,5,7::Int])) <$> (array [4] [0,1,1,0])
 
 -- |
--- >>> select (fromFlatList [4] [0,1,1,0]) (fromFlatList [4] [2,3,5,7::Int])
--- [2, 3, 3, 2]
--- >>> select (fromFlatList [2,2] [0,1,1,0]) (fromFlatList [2,2] [2,3,5,7::Int])
--- [[[2, 3],
---   [5, 7]],
---  [[5, 7],
---   [2, 3]]]
+-- >>> pretty $ select (array [4] [0,1,1,0]) (array [4] [2,3,5,7::Int])
+-- [2,3,3,2]
+-- >>> pretty $ select (array [2,2] [0,1,1,0]) (array [2,2] [2,3,5,7::Int])
+-- [[[2,3],
+--   [5,7]],
+--  [[5,7],
+--   [2,3]]]
 select :: Array Int -> Array a -> Array a
 select i a = D.joins [0..(D.rank i) - 1] $ (\x -> D.selects [(0,x)] a) <$> i
 
 -- |
 -- FIXME: Scalar version
 --
--- >>> Huihua.Array.reshape (D.asArray [3,2]) (D.asArray [1..5::Int])
--- [[1, 2],
---  [3, 4],
---  [5, 1]]
--- >>> Huihua.Array.reshape (D.asArray [3,-1]) (D.asArray [1..8::Int])
--- [[1, 2],
---  [3, 4],
---  [5, 6]]
+-- >>> pretty $ Huihua.Array.reshape (D.asArray [3,2]) (D.asArray [1..5::Int])
+-- [[1,2],
+--  [3,4],
+--  [5,1]]
+-- >>> pretty $ Huihua.Array.reshape (D.asArray [3,-1]) (D.asArray [1..8::Int])
+-- [[1,2],
+--  [3,4],
+--  [5,6]]
 reshape :: Array Int -> Array a -> Array a
 reshape i a = D.array i' (V.take (product i') (V.concat (replicate (1+ product i' `div` V.length (D.asVector a)) (D.asVector a))))
   where
@@ -355,14 +356,14 @@ rerank r a
 
 -- |
 --
--- >>> Huihua.Array.take (D.asArray [2]) (fromFlatList [3,3] [0..8::Int])
--- [[0, 1, 2],
---  [3, 4, 5]]
--- >>> Huihua.Array.take (D.asArray [2,2]) (fromFlatList [3,3] [0..8::Int])
--- [[0, 1],
---  [3, 4]]
+-- >>> pretty $ Huihua.Array.take (D.asArray [2]) (array [3,3] [0..8::Int])
+-- [[0,1,2],
+--  [3,4,5]]
+-- >>> pretty $ Huihua.Array.take (D.asArray [2,2]) (array [3,3] [0..8::Int])
+-- [[0,1],
+--  [3,4]]
 --
---  Huihua.Array.take (D.asArray [-2]) (fromFlatList [3,3] [0..8::Int])
+--  Huihua.Array.take (D.asArray [-2]) (array [3,3] [0..8::Int])
 -- [[3, 4, 5],
 --  [6, 7, 8]]
 take :: Array Int -> Array a -> Array a
@@ -373,14 +374,14 @@ take i a = D.takes (zip [0..] i') a
 
 -- |
 --
--- >>> Huihua.Array.drop (D.asArray [2]) (fromFlatList [3,3] [0..8::Int])
--- [[6, 7, 8]]
+-- >>> pretty $ Huihua.Array.drop (D.asArray [2]) (array [3,3] [0..8::Int])
+-- [[6,7,8]]
 --
--- >>> Huihua.Array.drop (D.asArray [2,2]) (fromFlatList [3,3] [0..8::Int])
+-- >>> pretty $ Huihua.Array.drop (D.asArray [2,2]) (array [3,3] [0..8::Int])
 -- [[8]]
 --
--- Huihua.Array.drop (D.asArray [-2]) (fromFlatList [3,3] [0..8::Int])
--- [[0, 1, 2]]
+-- pretty $ Huihua.Array.drop (D.asArray [-2]) (array [3,3] [0..8::Int])
+-- [[0,1,2]]
 -- FIXME: add squeeze here???
 drop :: Array Int -> Array a -> Array a
 drop i a = D.drops (zip [0..] i') a
@@ -399,16 +400,16 @@ fall a = D.orderBy Down $ D.extracts [0] a
 -- |
 --
 -- maps version of windows
--- >>> x = fromList2 3 [1..9] :: Array Int
--- >>> windows (D.asArray [2,2]) x
--- [[[[1, 2],
---    [4, 5]],
---   [[2, 3],
---    [5, 6]]],
---  [[[4, 5],
---    [7, 8]],
---   [[5, 6],
---    [8, 9]]]]
+-- >>> x = array [3,3] [1..9] :: Array Int
+-- >>> pretty $ windows (D.asArray [2,2]) x
+-- [[[[1,2],
+--    [4,5]],
+--   [[2,3],
+--    [5,6]]],
+--  [[[4,5],
+--    [7,8]],
+--   [[5,6],
+--    [8,9]]]]
 --
 -- FIXME: segfaults on:
 -- windows (toScalar 3) (D.asArray [0..3])
@@ -441,9 +442,9 @@ windows w a = D.tabulate sh' (D.index a . fxs)
 
 -- |
 --
--- >>> (Right a) = fmap (reshape (D.asArray [4,4])) (range (toScalar 3))
--- >>> i = D.asArray [1,2]
--- >>> find i a
+-- > a = fmap (A.reshape (D.asArray [4,4])) (A.range (toScalar 3))
+-- > i = D.asArray [1,2]
+-- > find i a
 -- Right [[0, 1, 0, 0],
 --  [1, 0, 0, 0],
 --  [0, 0, 1, 0],

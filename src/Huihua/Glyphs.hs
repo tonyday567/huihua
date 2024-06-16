@@ -11,7 +11,7 @@ module Huihua.Glyphs where
 import Data.Map.Strict qualified as Map
 import NumHask.Prelude as P hiding (First, null, diff)
 import Data.ByteString (ByteString)
-import NumHask.Array.Dynamic
+import NumHask.Array.Dynamic qualified as D
 import Huihua.Warning
 import Huihua.ArrayU as U
 import Huihua.Stack
@@ -373,10 +373,10 @@ applyStack _ (Stack []) = Left EmptyStack1
 applyStack _ (Stack [_]) = Left EmptyStack2
 
 applyNonadic :: Glyph -> Res
-applyNonadic Eta = Right $ pure $ ArrayD (toScalar $ 0.5 * pi)
-applyNonadic Pi = Right $ pure $ ArrayD (toScalar pi)
-applyNonadic Tau = Right $ pure $ ArrayD (toScalar $ 2 * pi)
-applyNonadic Infinity = Right $ pure $ ArrayD (toScalar infinity)
+applyNonadic Eta = Right $ pure $ ArrayD (D.toScalar $ 0.5 * pi)
+applyNonadic Pi = Right $ pure $ ArrayD (D.toScalar pi)
+applyNonadic Tau = Right $ pure $ ArrayD (D.toScalar $ 2 * pi)
+applyNonadic Infinity = Right $ pure $ ArrayD (D.toScalar infinity)
 applyNonadic Random = Left NYI
 applyNonadic _ = Left NYI
 

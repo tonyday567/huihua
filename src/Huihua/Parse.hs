@@ -12,7 +12,8 @@ import NumHask.Prelude as P hiding (First, null)
 import FlatParse.Basic as FP
 import Huihua.Parse.FlatParse
 import Data.ByteString (ByteString)
-import NumHask.Array.Dynamic
+import NumHask.Array.Dynamic qualified as D
+import NumHask.Array.Dynamic (Array)
 import Data.List qualified as List
 import Huihua.Stack as S
 import Huihua.ArrayU
@@ -28,6 +29,7 @@ import Huihua.Glyphs
 -- >>> import NumHask.Array.Dynamic as A
 -- >>> import Data.List qualified as List
 -- >>> import Huihua.Examples
+-- >>> import Prettyprinter
 
 -- |
 --
@@ -129,10 +131,10 @@ aStrand = Assembler $ \xs -> case xs of
   _ -> Nothing
 
 aArray :: Assembler Token a -> Assembler Token (Array a)
-aArray a = aArrayLeft *> (fromList1 <$> many a) <* aArrayRight
+aArray a = aArrayLeft *> (D.asArray <$> many a) <* aArrayRight
 
 aArrayStrand :: Assembler Token a -> Assembler Token (Array a)
-aArrayStrand a = (fmap fromList1 . (:)) <$> a <*> (some (aStrand *> a))
+aArrayStrand a = (fmap D.asArray . (:)) <$> a <*> (some (aStrand *> a))
 
 aToken :: Assembler Token Token
 aToken = Assembler $ \xs -> case xs of
@@ -159,7 +161,7 @@ instructionize ts = fromMaybe [] (fmap fst (assemble aInstructions ts))
 
 -- |
 -- >>> parseI exPage1
--- [IOp Divide,IOp Length,IOp Flip,IReduceOp Add,IOp Duplicate,IArrayI [1, 5, 8, 2]]
+-- [IOp Divide,IOp Length,IOp Flip,IReduceOp Add,IOp Duplicate,IArrayI (UnsafeArray [4] [1,5,8,2])]
 parseI :: ByteString -> [Instruction]
 parseI bs = parseT bs & instructionize
 
@@ -183,7 +185,7 @@ istep _ (Stack _) = Left NYI
 -- | compute a list of instructions executing from right to left.
 --
 -- >>> interpI (List.reverse $ parseI exPage1)
--- Right (Stack {stackList = [ArrayI 4]})
+-- Right (Stack {stackList = [ArrayI (UnsafeArray [] [4])]})
 interpI :: [Instruction] -> Either HuihuaWarning Stack
 interpI as = foldr (>=>) pure (fmap istep as) (Stack [])
 
