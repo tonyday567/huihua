@@ -141,16 +141,14 @@ aToken = Assembler $ \xs -> case xs of
   (x:xs) -> Just (x, xs)
   _ -> Nothing
 
-data Instruction = IOp Glyph | IReduceOp Glyph | IArrayI (Array Int) | IArrayD (Array Double) | INYI Token deriving (Show, Eq)
+data Instruction = IOp Glyph | IReduceOp Glyph | IArray (Array Double) | INYI Token deriving (Show, Eq)
 
 aInstruction :: Assembler Token Instruction
 aInstruction =
   (IReduceOp <$> aReduceOp) P.<|>
   (IOp <$> aOp) P.<|>
-  (IArrayI <$> aArray aInt) P.<|>
-  (IArrayD <$> aArray aDouble) P.<|>
-  (IArrayI <$> aArrayStrand aInt) P.<|>
-  (IArrayD <$> aArrayStrand aDouble) P.<|>
+  (IArray <$> aArray aDouble) P.<|>
+  (IArray <$> aArrayStrand aDouble) P.<|>
   (INYI <$> aToken)
 
 aInstructions :: Assembler Token [Instruction]
@@ -161,7 +159,7 @@ instructionize ts = fromMaybe [] (fmap fst (assemble aInstructions ts))
 
 -- |
 -- >>> parseI exPage1
--- [IOp Divide,IOp Length,IOp Flip,IReduceOp Add,IOp Duplicate,IArrayI (UnsafeArray [4] [1,5,8,2])]
+-- [IOp Divide,IOp Length,IOp Flip,IReduceOp Add,IOp Duplicate,IArray (UnsafeArray [4] [1.0,5.0,8.0,2.0])]
 parseI :: ByteString -> [Instruction]
 parseI bs = parseT bs & instructionize
 
@@ -177,22 +175,21 @@ isComment _ = False
 
 istep :: Instruction -> Stack -> Either HuihuaWarning Stack
 istep (IOp op) s = applyOp op s
-istep (IArrayI x) (Stack s) = Right (Stack (ArrayI x:s))
-istep (IArrayD x) (Stack s) = Right (Stack (ArrayD x:s))
+istep (IArray x) (Stack s) = Right (Stack (ArrayU x:s))
 istep (IReduceOp op) s = applyReduceOp op s
 istep _ (Stack _) = Left NYI
 
 -- | compute a list of instructions executing from right to left.
 --
 -- >>> interpI (List.reverse $ parseI exPage1)
--- Right (Stack {stackList = [ArrayI (UnsafeArray [] [4])]})
+-- Right (Stack {stackList = [ArrayU {arrayd = UnsafeArray [] [4.0]}]})
 interpI :: [Instruction] -> Either HuihuaWarning Stack
 interpI as = foldr (>=>) pure (fmap istep as) (Stack [])
 
 -- |
 --
 -- >>> run exPage1
--- ArrayI 4
+-- 4
 run :: ByteString -> Doc ann
 run bs = either viaShow pretty (interpI (List.reverse $ parseI bs))
 

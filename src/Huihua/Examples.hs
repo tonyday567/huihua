@@ -19,7 +19,7 @@ import Data.Text.Encoding (encodeUtf8)
 -- |
 --
 -- >>> run exPage1
--- ArrayI 4
+-- 4
 exPage1 :: ByteString
 exPage1 = encodeUtf8 [i|
 [1 5 8 2]
@@ -31,12 +31,15 @@ exPage1 = encodeUtf8 [i|
 -- |
 --
 -- >>> run exPage2
--- ArrayI [[[0,1,2,3],
---          [4,5,6,7],
---          [8,9,10,11]],
---         [[12,13,14,15],
---          [16,17,18,19],
---          [20,21,22,23]]]
+-- ╭─
+-- ╷  0  1  2  3
+-- ╷  4  5  6  7
+--    8  9 10 11
+-- ...
+--   12 13 14 15
+--   16 17 18 19
+--   20 21 22 23
+--               ╯
 exPage2 :: ByteString
 exPage2 = encodeUtf8 [i|
 2_3_4

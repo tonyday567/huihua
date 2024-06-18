@@ -373,10 +373,10 @@ applyStack _ (Stack []) = Left EmptyStack1
 applyStack _ (Stack [_]) = Left EmptyStack2
 
 applyNonadic :: Glyph -> Res
-applyNonadic Eta = Right $ pure $ ArrayD (D.toScalar $ 0.5 * pi)
-applyNonadic Pi = Right $ pure $ ArrayD (D.toScalar pi)
-applyNonadic Tau = Right $ pure $ ArrayD (D.toScalar $ 2 * pi)
-applyNonadic Infinity = Right $ pure $ ArrayD (D.toScalar infinity)
+applyNonadic Eta = Right $ pure $ ArrayU (D.toScalar $ 0.5 * pi)
+applyNonadic Pi = Right $ pure $ ArrayU (D.toScalar pi)
+applyNonadic Tau = Right $ pure $ ArrayU (D.toScalar $ 2 * pi)
+applyNonadic Infinity = Right $ pure $ ArrayU (D.toScalar infinity)
 applyNonadic Random = Left NYI
 applyNonadic _ = Left NYI
 
@@ -391,7 +391,7 @@ applyMonadic Floor x = U.floor x
 applyMonadic Ceiling x = U.ceiling x
 applyMonadic Round x = U.round x
 applyMonadic Length x = U.length x
-applyMonadic Shape x = U.shape' x
+applyMonadic Shape x = U.shape x
 applyMonadic Range x = U.range x
 applyMonadic First x = U.first x
 applyMonadic Deshape x = U.deshape x

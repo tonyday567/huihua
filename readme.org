@@ -8,7 +8,7 @@
 
 https://www.uiua.org/docs/
 
-* Imports
+* Development
 
 #+begin_src haskell-ng :results output
 :r
@@ -22,6 +22,8 @@ import NumHask.Prelude hiding ((.))
 import NumHask.Prelude qualified as P
 import NumHask.Array.Dynamic qualified as D
 import NumHask.Array.Shape qualified as Shape
+import Huihua.ArrayU as U
+import Huihua.Array qualified as A
 import Huihua.Stack
 import Huihua.Stack qualified as S
 import Huihua.Parse
@@ -36,7 +38,144 @@ import Prettyprinter hiding (equals)
 #+end_src
 
 #+RESULTS:
-: Ok, five modules loaded.
+#+begin_example
+Build profile: -w ghc-9.8.2 -O1
+In order, the following will be built (use -v for more details):
+ - huihua-0.0.1 (lib) (file src/Huihua/ArrayU.hs changed)
+Preprocessing library for huihua-0.0.1..
+GHCi, version 9.8.2: https://www.haskell.org/ghc/  :? for help
+[1 of 8] Compiling Huihua.Examples  ( src/Huihua/Examples.hs, interpreted )
+[2 of 8] Compiling Huihua.Parse.FlatParse ( src/Huihua/Parse/FlatParse.hs, interpreted )
+[3 of 8] Compiling Huihua.Warning   ( src/Huihua/Warning.hs, interpreted )
+[4 of 8] Compiling Huihua.Array     ( src/Huihua/Array.hs, interpreted )
+[5 of 8] Compiling Huihua.ArrayU    ( src/Huihua/ArrayU.hs, interpreted )
+[6 of 8] Compiling Huihua.Stack     ( src/Huihua/Stack.hs, interpreted )
+[7 of 8] Compiling Huihua.Glyphs    ( src/Huihua/Glyphs.hs, interpreted )
+[8 of 8] Compiling Huihua.Parse     ( src/Huihua/Parse.hs, interpreted )
+Ok, 8 modules loaded.
+Ok, 8 modules loaded.
+#+end_example
+
+** ArrayH pretty
+
+#+begin_src haskell-ng :results output
+x = D.array [2,2,2,2] ([0..14] <> [100]) :: Array Double
+x
+pretty x
+pretty (ArrayH x)
+#+end_src
+
+#+RESULTS:
+#+begin_example
+UnsafeArray [2,2,2,2] [0.0,1.0,2.0,3.0,4.0,5.0,6.0,7.0,8.0,9.0,10.0,11.0,12.0,13.0,14.0,100.0]
+[[[[0.0,1.0],
+   [2.0,3.0]],
+  [[4.0,5.0],
+   [6.0,7.0]]],
+ [[[8.0,9.0],
+   [10.0,11.0]],
+  [[12.0,13.0],
+   [14.0,100.0]]]]
+╭─
+╷ .0 ..1
+╷ .2 ..3
+╷
+  .4 ..5
+  .6 ..7
+
+
+  .8 ..9
+  10 .11
+
+  12 .13
+  14 100
+         ╯
+#+end_example
+
+
+#+begin_src haskell-ng :results output
+import Data.Either
+t = ptree (fmap showU x)
+maxp = D.folds [1] (P.maximum . fmap P.length) (D.join $ D.asArray $ rights t)
+s = fmap (fmap ((D.zipWithE (\m a -> lpad '.' m a) maxp))) t
+sdoc = mconcat $ fmap (either (\n -> replicate (n-1) mempty) (pure . hsep . fmap pretty . D.arrayAs)) s
+sdocMin = D.concatenate 0 (D.konst [max 0 (D.rank x - P.length sdoc)] mempty) (D.asArray sdoc)
+rankPrefix = fmap pretty (D.reshapeDef " " [D.length sdocMin] (D.konst [D.rank x - 1] "╷"))
+deco = zipWith (<+>) (D.arrayAs rankPrefix) (D.arrayAs sdocMin)
+final = (pretty "╭─") <> line <> (vsep deco) <> hang 1 (line <> pretty "╯")
+final
+#+end_src
+
+#+RESULTS:
+#+begin_example
+╭─
+╷ .0 ..1
+╷ .2 ..3
+╷
+  .4 ..5
+  .6 ..7
+
+
+  .8 ..9
+  10 .11
+
+  12 .13
+  14 100
+         ╯
+#+end_example
+
+
+#+begin_src haskell-ng :results output
+x = D.array [2,2] [2, 2.222,200.001,200.01] :: Array Double
+pretty (U.ArrayH x)
+a = D.konst [2,2] (3 / P.pi) :: Array Double
+pretty (U.ArrayH a)
+a3 = D.konst [1,1,1] 1
+pretty (U.ArrayH a3)
+a1 = D.asArray [1..4]
+pretty (U.ArrayH a1)
+#+end_src
+
+#+RESULTS:
+#+begin_example
+╭─
+╷ ......2 .2.222
+  200.001 200.01
+                 ╯
+╭─
+╷ 0.954929658551372 0.954929658551372
+  0.954929658551372 0.954929658551372
+                                      ╯
+╭─
+╷
+╷ 1
+    ╯
+[1 2 3 4]
+#+end_example
+
+deconstruction
+
+#+begin_src haskell-ng :results output
+-- x = D.array [2,2] [2, 2.222,200.001,200.01] :: Array Double
+-- x = D.array [1,1,1] [1] :: Array Double
+x = D.array [2,2,2,2] ([0..14] <> [100]) :: Array Double
+dtable = D.maps [1] (\a -> U.lpad '.' (P.maximum (P.length <$> a)) <$> a) (U.showU <$> x)
+dtable1 = D.folds [0] (hsep . D.arrayAs . fmap pretty) dtable
+dtableMin = D.concatenate 0 (D.konst [max 0 (D.rank x - 1 - D.length dtable1)] mempty) dtable1
+rankPrefix = fmap pretty (D.reshapeDef "x" [D.length dtableMin] (D.konst [D.rank x - 1] "╷"))
+decotable = D.zipWithE (<+>) rankPrefix dtableMin
+final = (pretty "╭─") <> line <> ((vsep . D.arrayAs) decotable) <> hang 1 (line <> pretty "╯")
+final
+dtable
+#+end_src
+
+#+RESULTS:
+: ╭─
+: ╷
+: ╷ .0 .1 .2 .3 ..4 ..5 ..6 ..7
+: ╷ .8 .9 10 11 .12 .13 .14 100
+:                               ╯
+: UnsafeArray [2,2,2,2] [".0",".1",".2",".3","..4","..5","..6","..7",".8",".9","10","11",".12",".13",".14","100"]
 
 * token parsing
 
@@ -172,7 +311,6 @@ C.lines bs & fmap (runParser_ tokens) & orderUiua & assemblef & foldr compute1 (
 
 #+RESULTS:
 : Stack {stackList = [4.0]}
-
 
 * NYI
 
