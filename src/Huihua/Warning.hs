@@ -16,7 +16,7 @@ import Data.These
 import Data.List qualified as List
 
 data HuihuaWarning =
-    NumHaskError String | NYI | EmptyStack1 | EmptyStack2 | ApplyFunction | NotBox | TypeMismatch | SizeMismatch | RankMismatch | NotNat | EmptyArray | NotArray | NoScalarOp | OutOfBounds | NoOpenArray | NotReduceable | ApplyNonOperator deriving (Eq, Ord, Show)
+    NumHaskError String | NYI | EmptyStack1 | EmptyStack2 | ApplyFunction | NotBox | TypeMismatch | SizeMismatch | RankMismatch | NotNat | EmptyArray | NotArray | NoScalarOp | OutOfBounds | NoOpenArray | NotReduceable | ApplyNonOperator | RaggedInternal | NoIdentity deriving (Eq, Ord, Show)
 
 showWarnings :: [HuihuaWarning] -> String
 showWarnings = List.nub >>> fmap show >>> unlines

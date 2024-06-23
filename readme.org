@@ -25,6 +25,8 @@ import NumHask.Array.Shape qualified as Shape
 import Huihua.ArrayU as U
 import Huihua.Array qualified as A
 import Huihua.Stack
+import Huihua.Examples
+import Huihua.Glyphs as G
 import Huihua.Stack qualified as S
 import Huihua.Parse
 import Huihua.Parse.FlatParse
@@ -55,6 +57,162 @@ GHCi, version 9.8.2: https://www.haskell.org/ghc/  :? for help
 Ok, 8 modules loaded.
 Ok, 8 modules loaded.
 #+end_example
+
+** scratchpad
+
+#+begin_src haskell-ng :results output
+a = D.iota [3,4]
+pretty a
+(x D.:| xs) = a
+x
+xs
+D.extracts [1] xs
+D.zips [0] (D.zipWithE (\x' xs' -> foldl' (+) (D.fromScalar x') xs')) (D.extracts [0] x) (D.extractsExcept [0] xs)
+
+
+#+end_src
+
+#+RESULTS:
+: [[0,1,2,3],
+:  [4,5,6,7],
+:  [8,9,10,11]]
+: UnsafeArray [4] [0,1,2,3]
+: UnsafeArray [2,4] [4,5,6,7,8,9,10,11]
+: UnsafeArray [4] [UnsafeArray [2] [4,8],UnsafeArray [2] [5,9],UnsafeArray [2] [6,10],UnsafeArray [2] [7,11]]
+: UnsafeArray [4] [12,15,18,21]
+
+#+begin_src haskell-ng :results output
+xy a = let (x D.:| xs) = a in D.zipWithE (\a as -> foldl' (+) a as) x (D.extractsExcept [0] xs)
+#+end_src
+
+#+RESULTS:
+
+#+begin_src haskell-ng :results output
+let a3 = D.iota [2,3,4]
+reduceU (+) zero a3
+xy a3
+#+end_src
+
+#+RESULTS:
+: UnsafeArray [3,4] [12,14,16,18,20,22,24,26,28,30,32,34]
+: UnsafeArray [3,4] [12,14,16,18,20,22,24,26,28,30,32,34]
+
+#+begin_src haskell-ng :results output
+import Prelude qualified
+:t Prelude.mod infinity (Prelude.3)
+#+end_src
+
+#+RESULTS:
+#+begin_example
+Build profile: -w ghc-9.8.2 -O1
+In order, the following will be built (use -v for more details):
+ - huihua-0.0.1 (lib) (file src/Huihua/ArrayU.hs changed)
+Preprocessing library for huihua-0.0.1..
+GHCi, version 9.8.2: https://www.haskell.org/ghc/  :? for help
+[1 of 8] Compiling Huihua.Examples  ( src/Huihua/Examples.hs, interpreted )
+[2 of 8] Compiling Huihua.Parse.FlatParse ( src/Huihua/Parse/FlatParse.hs, interpreted )
+[3 of 8] Compiling Huihua.Warning   ( src/Huihua/Warning.hs, interpreted )
+[4 of 8] Compiling Huihua.Array     ( src/Huihua/Array.hs, interpreted )
+
+src/Huihua/Array.hs:495:35: error: [GHC-83865]
+    • Couldn't match expected type: Array a -> Array b
+                  with actual type: Array a
+    • Possible cause: ‘D.reduces’ is applied to too many arguments
+      In the expression: D.reduces [0] (foldl' (flip f) x) xs
+      In an equation for ‘reduceNoIdentityU’:
+          reduceNoIdentityU f (x D.:| xs)
+            = D.reduces [0] (foldl' (flip f) x) xs
+    • Relevant bindings include
+        xs :: Array a (bound at src/Huihua/Array.hs:495:29)
+        x :: Array a (bound at src/Huihua/Array.hs:495:22)
+        f :: a -> a -> a (bound at src/Huihua/Array.hs:495:19)
+        reduceNoIdentityU :: (a -> a -> a) -> a -> Array a -> Array b
+          (bound at src/Huihua/Array.hs:495:1)
+    |
+495 | reduceNoIdentityU f (x D.:| xs) = D.reduces [0] (foldl' (flip f) x) xs
+    |                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Failed, three modules loaded.
+<interactive>:1:13: error: [GHC-88464]
+    Variable not in scope: infinity :: a -> c
+
+<interactive>:1:23: error: [GHC-88464]
+    Data constructor not in scope: Prelude :: b0 -> c
+#+end_example
+
+** parser debug pipeline
+
+#+begin_src haskell-ng :results output
+x = [i|/- [1 2 3]|]
+runParser tokens x
+parseT x
+xis = parseT x & instructionize
+interpI xis
+run x
+#+end_src
+
+#+RESULTS:
+: OK [GlyphToken Reduce,GlyphToken Subtract,GlyphToken ArrayLeft,DoubleToken 1.0,DoubleToken 2.0,DoubleToken 3.0,GlyphToken ArrayRight] ""
+: [GlyphToken Reduce,GlyphToken Subtract,GlyphToken ArrayLeft,DoubleToken 1.0,DoubleToken 2.0,DoubleToken 3.0,GlyphToken ArrayRight]
+: Right (Stack {stackList = [ArrayU {arrayd = UnsafeArray [] [-6.0]}]})
+: ¯6
+
+#+begin_src haskell-ng :results output
+D.folds [] (foldl' (+) zero) (D.array [4] [5, 1, 8, 2] :: Array Double)
+D.folds [1] (foldl' (+) zero) (D.array [2,2] [5, 1, 8, 2] :: Array Double)
+x3 = D.array [2,2,3] [0,1,0,0,4,3,1,1,1,1,1,1]
+D.folds [1,2] (foldl' (+) zero) x3
+pretty (ArrayU x3)
+#+end_src
+
+#+RESULTS:
+#+begin_example
+UnsafeArray [] [16.0]
+UnsafeArray [2] [13.0,3.0]
+UnsafeArray [2,3] [1,2,1,1,5,4]
+╭─
+╷ 0 1 0
+╷ 0 4 3
+
+  1 1 1
+  1 1 1
+        ╯
+#+end_example
+
+#+begin_src haskell-ng :results output
+D.folds [0] sum (D.iota 5)
+#+end_src
+
+#+RESULTS:
+: UnsafeArray [5] [0,1,2,3,4]
+
+#+begin_src haskell-ng :results output
+List.drop 2 xis
+either viaShow pretty $ interpI $ List.drop 2 xis
+a = (D.asArray [1,5,8,2] :: Array Double)
+run [i|+0_1_0 0_4_3|]
+run [i|+[0_1_0 0_4_3] [1_1_1 1_1_1]|]
+#+end_src
+
+#+RESULTS:
+: [IOp Flip,IReduceOp Add,IOp Duplicate,IArray (UnsafeArray [4] [1.0,5.0,8.0,2.0])]
+: [1 5 8 2]
+: [1 5 8 2]
+: [0 5 3]
+: ╭─
+: ╷ 1 5 4
+:   1 2 1
+:         ╯
+
+#+begin_src haskell-ng :results output
+runParser tokens "◌1 2"
+runParser tokens [i|◌1 2|]
+runParser tokens (encodeUtf8 [i|◌1 2|])
+#+end_src
+
+#+RESULTS:
+: OK [] "\204\&1 2"
+: OK [GlyphToken Pop,IntToken 1,IntToken 2] ""
+: OK [GlyphToken Pop,IntToken 1,IntToken 2] ""
 
 ** ArrayH pretty
 
@@ -176,6 +334,248 @@ dtable
 : ╷ .8 .9 10 11 .12 .13 .14 100
 :                               ╯
 : UnsafeArray [2,2,2,2] [".0",".1",".2",".3","..4","..5","..6","..7",".8",".9","10","11",".12",".13",".14","100"]
+
+** doctest subscript bug
+
+#+begin_src haskell-ng :results output
+-- |
+--
+-- > run [i|ⁿ2 3|]
+-- 9
+-- > run [i|ⁿ2 [1 2 3]|]
+-- [1 4 9]
+--
+-- >>> 1+1
+--
+#+end_src
+
+#+begin_src haskell-ng :results output
+-- | ₙ
+--
+-- > run [i|ₙ2 8|]
+-- 4
+-- > run [i|ₙ [2 3 4] [16 27 1024]|]
+--
+#+end_src
+
+#+begin_src haskell-ng :results output
+run [i|ⁿ2 3|]
+run [i|ⁿ2 [1 2 3]|]
+run [i|ₙ2 8|]
+run [i|ₙ [2 3 4] [16 27 1024]|]
+log 8 / log 2
+#+end_src
+
+#+begin_src haskell-ng :results output
+-- | /ⁿ
+--
+-- >>> run [i|/ⁿ[]|]
+-- 1
+-- >>> run [i|/ⁿ [2]|]
+-- 2
+-- >>> run [i|/ⁿ 2_1|]
+-- 2
+-- >>> run [i|/ⁿ [1_2_3 4_5_6]|]
+-- [4 25 216]
+#+end_src
+
+#+begin_src haskell-ng :results output
+run [i|/ⁿ[]|]
+run [i|/ⁿ [2]|]
+run [i|/ⁿ 2_1|]
+run [i|/ⁿ [1_2_3 4_5_6]|]
+#+end_src
+
+#+RESULTS:
+: 1
+: 2
+: 1
+: [4 25 216]
+
+#+begin_src haskell-ng :results output
+-- | /ₙ
+--
+-- >>> run [i|/ₙ[]|]
+-- 1
+-- >>> run [i|/ₙ [2]|]
+-- 2
+-- >>> run [i|/ₙ 2_1|]
+-- 2
+-- >>> run [i|/ₙ [1_2_3 4_5_6]|]
+-- [4 25 216]
+#+end_src
+
+#+begin_src haskell-ng :results output
+run [i|/ₙ[]|]
+run [i|/ₙ [2]|] -- 2
+run [i|/ₙ 2_1|] -- 0
+run [i|/ₙ [4_5_6 1_2_3]|] -- [∞ 2.321928094887362 1.6309297535714575]
+
+#+end_src
+
+#+RESULTS:
+: NoIdentity
+: [2]
+: Infinity
+: [Infinity 2.321928094887362 1.6309297535714573]
+
+** reduce1U dev
+
+#+begin_src haskell-ng :results output
+a = D.iota [3,4]
+pretty a
+(x D.:| xs) = a
+x
+xs
+D.extracts [1] xs
+D.zips [0] (D.zipWithE (\x' xs' -> foldl' (+) (D.fromScalar x') xs')) (D.extracts [0] x) (D.extractsExcept [0] xs)
+
+
+#+end_src
+
+#+RESULTS:
+: [[0,1,2,3],
+:  [4,5,6,7],
+:  [8,9,10,11]]
+: UnsafeArray [4] [0,1,2,3]
+: UnsafeArray [2,4] [4,5,6,7,8,9,10,11]
+: UnsafeArray [4] [UnsafeArray [2] [4,8],UnsafeArray [2] [5,9],UnsafeArray [2] [6,10],UnsafeArray [2] [7,11]]
+: UnsafeArray [4] [12,15,18,21]
+
+#+begin_src haskell-ng :results output
+xy a = let (x D.:| xs) = a in D.zipWithE (\a as -> foldl' (+) a as) x (D.extractsExcept [0] xs)
+#+end_src
+
+#+RESULTS:
+
+#+begin_src haskell-ng :results output
+let a3 = D.iota [2,3,4]
+reduceU (+) zero a3
+xy a3
+#+end_src
+
+#+RESULTS:
+: UnsafeArray [3,4] [12,14,16,18,20,22,24,26,28,30,32,34]
+: UnsafeArray [3,4] [12,14,16,18,20,22,24,26,28,30,32,34]
+
+#+begin_src haskell-ng :results output
+import Prelude qualified
+:t Prelude.mod infinity (Prelude.3)
+#+end_src
+
+#+RESULTS:
+#+begin_example
+Build profile: -w ghc-9.8.2 -O1
+In order, the following will be built (use -v for more details):
+ - huihua-0.0.1 (lib) (file src/Huihua/ArrayU.hs changed)
+Preprocessing library for huihua-0.0.1..
+GHCi, version 9.8.2: https://www.haskell.org/ghc/  :? for help
+[1 of 8] Compiling Huihua.Examples  ( src/Huihua/Examples.hs, interpreted )
+[2 of 8] Compiling Huihua.Parse.FlatParse ( src/Huihua/Parse/FlatParse.hs, interpreted )
+[3 of 8] Compiling Huihua.Warning   ( src/Huihua/Warning.hs, interpreted )
+[4 of 8] Compiling Huihua.Array     ( src/Huihua/Array.hs, interpreted )
+
+src/Huihua/Array.hs:495:35: error: [GHC-83865]
+    • Couldn't match expected type: Array a -> Array b
+                  with actual type: Array a
+    • Possible cause: ‘D.reduces’ is applied to too many arguments
+      In the expression: D.reduces [0] (foldl' (flip f) x) xs
+      In an equation for ‘reduceNoIdentityU’:
+          reduceNoIdentityU f (x D.:| xs)
+            = D.reduces [0] (foldl' (flip f) x) xs
+    • Relevant bindings include
+        xs :: Array a (bound at src/Huihua/Array.hs:495:29)
+        x :: Array a (bound at src/Huihua/Array.hs:495:22)
+        f :: a -> a -> a (bound at src/Huihua/Array.hs:495:19)
+        reduceNoIdentityU :: (a -> a -> a) -> a -> Array a -> Array b
+          (bound at src/Huihua/Array.hs:495:1)
+    |
+495 | reduceNoIdentityU f (x D.:| xs) = D.reduces [0] (foldl' (flip f) x) xs
+    |                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Failed, three modules loaded.
+<interactive>:1:13: error: [GHC-88464]
+    Variable not in scope: infinity :: a -> c
+
+<interactive>:1:23: error: [GHC-88464]
+    Data constructor not in scope: Prelude :: b0 -> c
+#+end_example
+
+
+* combo array parsing
+
+#+begin_src haskell-ng :results output
+x = [i|[2_1_0 0_4_3]|]
+runParser tokens x
+parseT x
+parseT x & instructionize
+interpI (List.reverse $ parseI x)
+run x
+#+end_src
+
+#+RESULTS:
+: OK [GlyphToken ArrayLeft,DoubleToken 2.0,GlyphToken Strand,DoubleToken 1.0,GlyphToken Strand,DoubleToken 0.0,DoubleToken 0.0,GlyphToken Strand,DoubleToken 4.0,GlyphToken Strand,DoubleToken 3.0,GlyphToken ArrayRight] ""
+: [GlyphToken ArrayLeft,DoubleToken 2.0,GlyphToken Strand,DoubleToken 1.0,GlyphToken Strand,DoubleToken 0.0,DoubleToken 0.0,GlyphToken Strand,DoubleToken 4.0,GlyphToken Strand,DoubleToken 3.0,GlyphToken ArrayRight]
+: [WArray (UnsafeArray [2] [IArray (UnsafeArray [3] [2.0,1.0,0.0]),IArray (UnsafeArray [3] [0.0,4.0,3.0])])]
+: Right (Stack {stackList = [ArrayU {arrayd = UnsafeArray [2,3] [2.0,1.0,0.0,0.0,4.0,3.0]}]})
+: ╭─
+: ╷ 2 1 0
+:   0 4 3
+:         ╯
+
+#+begin_src haskell-ng :results output
+:t D.extracts [0,1]
+let a = D.array [2,3,4] [0..23] :: D.Array Int
+
+a' = D.extracts [0,1] a
+:t D.drops [(0,0),(1,1)] a'
+#+end_src
+
+#+RESULTS:
+: D.extracts [0,1] :: Array a -> Array (Array a)
+: D.drops [(0,0),(1,1)] a' :: Array (Array Int)
+
+#+begin_src haskell-ng :results output
+run [i|/>.[2_1_0 0_4_3]|]
+#+end_src
+
+#+RESULTS:
+: [0 1]
+: ╭─
+: ╷ 2 1 0
+:   0 4 3
+:         ╯
+
+
+ #+begin_src haskell-ng :results output
+import Huihua.Glyphs
+ts = parseT x
+:t ts
+-- assemble (aArrayLeft *> many aToken <* aArrayRight) [GlyphToken ArrayLeft,GlyphToken ArrayRight]
+assemble (aArrayLeft *> many aToken) [GlyphToken ArrayLeft,GlyphToken ArrayRight]
+ #+end_src
+
+ #+RESULTS:
+ : ts :: [Huihua.Parse.Token]
+ : Just ([GlyphToken ArrayRight],[])
+
+
+* number parsing
+
+#+begin_src haskell-ng :results output
+run "123. 5"
+#+end_src
+
+#+RESULTS:
+: 123
+: 5
+: 5
+
+#+begin_src haskell-ng :results output
+showU (P.negate 2)
+#+end_src
+
+#+RESULTS:
+: showU (P.negate 2) :: Data.Text.Internal.Text
 
 * token parsing
 

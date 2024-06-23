@@ -8,7 +8,7 @@
 
 -- | Compatability layer between NumHask.Dynamic.Array and uiua arrays.
 --
--- Unlike uiua, this layer distinguishes between Int and Double arrays.
+-- The main purpose is to change types from Double to Int and back as necessary. (all uiua arrays are doubles).
 module Huihua.ArrayU
   ( -- $usage
     ArrayU (..),
@@ -51,10 +51,10 @@ module Huihua.ArrayU
     -- * dyadics
     equals,
     notequals,
-    lt,
-    lte,
-    gt,
-    gte,
+    lessThan,
+    lessOrEqual,
+    greaterThan,
+    greaterOrEqual,
     add,
     subtract,
     multiply,
@@ -64,7 +64,7 @@ module Huihua.ArrayU
     logarithm,
     minimum,
     maximum,
-    arctangent,
+    atangent,
 
     match,
     couple,
@@ -110,14 +110,26 @@ import Data.Bifunctor qualified as Bi
 import Data.List qualified as List
 import Data.Tree qualified as Tree
 import Data.Either
+import Data.Text (Text, pack, unpack)
+import Data.Text qualified as Text
 
 -- $setup
 -- >>> :set -XOverloadedStrings
+-- >>> :set -XQuasiQuotes
+-- >>> import Data.String.Interpolate
 -- >>> import Huihua.Array as A
 -- >>> import NumHask.Array.Dynamic as D
+-- >>> import Prettyprinter
+-- >>> import Huihua.Parse
 
+-- | A uiua array which is always an Array Double underneath.
+--
 -- >>> x = D.array [2,2] [2, 2.222,200.001,200.01] :: Array Double
 -- >>> pretty (ArrayU x)
+-- ╭─
+-- ╷       2  2.222
+--   200.001 200.01
+--                  ╯
 newtype ArrayU = ArrayU { arrayd :: Array Double } deriving (Eq, Show, Generic)
 
 instance Pretty ArrayU where
@@ -127,7 +139,7 @@ instance Pretty ArrayU where
     _ -> final
     where
     t = ptree (fmap showU x)
-    maxp = D.folds [1] (P.maximum . fmap P.length) (D.join $ D.asArray $ rights t)
+    maxp = D.reduces [0] (P.maximum . fmap Text.length) (D.join $ D.asArray $ rights t)
     s = fmap (fmap ((D.zipWithE (\m a -> lpad ' ' m a) maxp))) t
     sdoc = mconcat $ fmap (either (\n -> replicate (n-1) mempty) (pure . hsep . fmap pretty . D.arrayAs)) s
     sdocMin = D.concatenate 0 (D.konst [max 0 (D.rank x - P.length sdoc - 1)] mempty) (D.asArray sdoc)
@@ -135,11 +147,11 @@ instance Pretty ArrayU where
     deco = zipWith (<+>) (D.arrayAs rankPrefix) (D.arrayAs sdocMin)
     final = (pretty "╭─") <> line <> (vsep deco) <> hang 1 (line <> pretty "╯")
 
-showU :: Double -> String
-showU x = bool (show x) (show (asInt x)) (isInt x)
+showU :: Double -> Text
+showU x = bool mempty (pack "¯") (x < zero) <> bool (pack $ show (abs x)) (pack $ show (asInt (abs x))) (isInt x)
 
-lpad :: Char -> Int -> String -> String
-lpad c maxl x = (replicate (maxl - P.length x) c) <> x
+lpad :: Char -> Int -> Text -> Text
+lpad c maxl x = (pack $ replicate (maxl - P.length (unpack x)) c) <> x
 
 unfoldF :: Either Int (Array a) -> (Maybe (Either Int (Array a)), [Either Int (Array a)])
 unfoldF (Left n) = (Just (Left n), [])
@@ -171,52 +183,141 @@ arrayi_ a = either (error . show) id (arrayi' a)
 
 type Res = Either HuihuaWarning [ArrayU]
 
-
+-- | .
+--
+-- >>> run ". [1 2 3]"
+-- [1 2 3]
+-- [1 2 3]
 duplicate :: ArrayU -> Res
 duplicate x = Right [x,x]
 
+-- | ◌
+--
+-- >>> run [i|◌1 2|]
+-- 2
 pop :: ArrayU -> Res
 pop _ = Right []
 
+-- | ∘
+--
+-- >>> run [i|∘ 5|]
+-- 5
 identity :: ArrayU -> Res
 identity x = Right [x]
 
+-- | ¬
+--
+-- >>> run [i|¬0|]
+-- 1
+-- >>> run [i|¬[0 1 2 3]|]
+-- [1 0 ¯1 ¯2]
 not :: ArrayU -> Res
 not (ArrayU a) = Right . pure . ArrayU . A.not $ a
 
+
+-- | ±
+--
+-- >>> run [i|± 1|]
+-- 1
 sign :: ArrayU -> Res
 sign (ArrayU a) = Right . pure . ArrayU . A.sign $ a
 
+-- | ¯
+--
+-- >>> run [i|¯ 1|]
+-- ¯1
 negate :: ArrayU -> Res
 negate (ArrayU a) = Right . pure . ArrayU . A.negate $ a
 
+-- | ⌵
+--
+-- >>> run [i|⌵ ¯1|]
+-- 1
 absoluteValue :: ArrayU -> Res
 absoluteValue (ArrayU a) = Right . pure . ArrayU . A.absolute $ a
 
+
+-- | √
+--
+-- >>> run [i|√4|]
+-- 2
 sqrt :: ArrayU -> Res
 sqrt (ArrayU a) = Right . pure . ArrayU . A.sqrt $ a
 
+-- | ∿
+--
+-- >>> run [i|∿ 1|]
+-- 0.8414709848078965
 sine :: ArrayU -> Res
 sine (ArrayU a) = Right . pure . ArrayU . A.sin $ a
 
+-- | ⌊
+--
+-- >>> run [i|⌊1.5|]
+-- 1
 floor :: ArrayU -> Res
 floor (ArrayU a) = Right . pure . ArrayU . fmap fromIntegral . A.floor $ a
 
+-- | ⌈
+--
+-- >>> run [i|⌈1.5|]
+-- 2
 ceiling :: ArrayU -> Res
 ceiling (ArrayU a) = Right . pure . ArrayU . fmap fromIntegral . A.ceiling $ a
 
+-- | ⁅
+--
+-- >>> run [i|⁅1.5|]
+-- 2
 round :: ArrayU -> Res
 round (ArrayU a) = Right . pure . ArrayU . fmap fromIntegral . A.round $ a
 
+-- | ⧻
+--
+-- >>> run [i|⧻[1 3 5]|]
+-- 3
 length :: ArrayU -> Res
 length (ArrayU a) = Right . pure . ArrayU . fmap fromIntegral . A.length $ a
 
+
+-- | △
+--
+-- >>> run [i|△1_2_3|]
+-- [3]
+-- >>> run [i|△1|]
+-- []
+-- >>> run [i|△[]|]
+-- [0]
 shape :: ArrayU -> Res
 shape (ArrayU a) = Right . pure . ArrayU . fmap fromIntegral . A.shape $ a
 
+-- | ⇡
+--
+-- >>> run [i|⇡5|]
+-- [0 1 2 3 4]
+-- >>> run [i|⇡2_3|]
+-- ╭─
+-- ╷ 0 0
+-- ╷ 0 1
+--   0 2
+-- ...
+--   1 0
+--   1 1
+--   1 2
+--       ╯
+-- >>> run [i|⇡[3]|]
+-- ╭─
+-- ╷ 0
+--   1
+--   2
+--     ╯
 range :: ArrayU -> Res
 range (ArrayU a) = Right . pure . ArrayU . fmap fromIntegral . A.range $ fmap asInt a
 
+-- | ⊢
+--
+-- >>> run [i|⊢1_2_3|]
+-- 1
 first :: ArrayU -> Res
 first (ArrayU a) = Right . pure . ArrayU . A.first $ a
 
@@ -257,47 +358,141 @@ equals (ArrayU x) (ArrayU y) = fmap (pure . ArrayU . fmap fromIntegral) $ A.equa
 notequals :: ArrayU -> ArrayU -> Res
 notequals (ArrayU x) (ArrayU y) = fmap (pure . ArrayU . fmap fromIntegral) $ A.notequals x y
 
-lt :: ArrayU -> ArrayU -> Res
-lt (ArrayU x) (ArrayU y) = fmap (pure . ArrayU . fmap fromIntegral) $ A.lt x y
 
-lte :: ArrayU -> ArrayU -> Res
-lte (ArrayU x) (ArrayU y) =fmap (pure . ArrayU . fmap fromIntegral) $ A.lte x y
+-- | <
+--
+-- >>> run [i|<2 1|]
+-- 1
+-- >>> run [i|<2 [1 2 3]|]
+-- [1 0 0]
+-- >>> run [i|< [1 2 2] [1 2 3]|]
+-- [0 0 0]
+lessThan :: ArrayU -> ArrayU -> Res
+lessThan (ArrayU x) (ArrayU y) = fmap (pure . ArrayU . fmap fromIntegral) $ A.lessThan x y
 
-gt :: ArrayU -> ArrayU -> Res
-gt (ArrayU x) (ArrayU y) = fmap (pure . ArrayU . fmap fromIntegral) $ A.gt x y
+-- | ≤
+--
+-- >>> run [i|≤1 2|]
+-- 0
+-- >>> run [i|≤5 5|]
+-- 1
+lessOrEqual :: ArrayU -> ArrayU -> Res
+lessOrEqual (ArrayU x) (ArrayU y) =fmap (pure . ArrayU . fmap fromIntegral) $ A.lessOrEqual x y
 
-gte :: ArrayU -> ArrayU -> Res
-gte (ArrayU x) (ArrayU y) = fmap (pure . ArrayU . fmap fromIntegral) $ A.gte x y
+-- | >
+--
+-- >>> run [i| >1 2|]
+-- 1
+-- >>> run [i| >5 5|]
+-- 0
+greaterThan :: ArrayU -> ArrayU -> Res
+greaterThan (ArrayU x) (ArrayU y) = fmap (pure . ArrayU . fmap fromIntegral) $ A.greaterThan x y
 
+-- | ≥
+--
+-- >>> run [i| ≥1 2|]
+-- 1
+-- >>> run [i| ≥5 5|]
+-- 1
+greaterOrEqual :: ArrayU -> ArrayU -> Res
+greaterOrEqual (ArrayU x) (ArrayU y) = fmap (pure . ArrayU . fmap fromIntegral) $ A.greaterOrEqual x y
+
+
+-- | +
+--
+-- >>> run [i|+2 1|]
+-- 3
+-- >>> run [i|+2 [1 2 3]|]
+-- [3 4 5]
+-- >>> run [i|+ [1 2 2] [1 2 3]|]
+-- [2 4 5]
+-- >>> run [i|+ [1_2_3 4_5_6] [1 2]|]
+-- ╭─
+-- ╷ 2 3 4
+--   6 7 8
+--         ╯
+-- >>> run [i|+ [1 2] [1_2_3 4_5_6]|]
+-- ╭─
+-- ╷ 2 3 4
+--   6 7 8
+--         ╯
 add :: ArrayU -> ArrayU -> Res
 add (ArrayU x) (ArrayU y) = fmap (pure . ArrayU) $ A.add x y
 
+-- | -
+--
+-- >>> run [i|-2 1|]
+-- ¯1
+-- >>> run [i|-2 [1 2 3]|]
+-- [¯1 0 1]
+-- >>> run [i|-[1 2 3] [4 5 6]|]
+-- [3 3 3]
 subtract :: ArrayU -> ArrayU -> Res
 subtract (ArrayU x) (ArrayU y) = fmap (pure . ArrayU) $ A.subtract x y
 
+-- | ×
+--
+-- >>> run [i|×2 1|]
+-- 2
+-- >>> run [i|×2 [1 2 3]|]
+-- [2 4 6]
 multiply :: ArrayU -> ArrayU -> Res
 multiply (ArrayU x) (ArrayU y) = fmap (pure . ArrayU) $ A.multiply x y
 
+-- | ÷
+--
+-- >>> run [i|÷2 1|]
+-- 0.5
 divide :: ArrayU -> ArrayU -> Res
 divide (ArrayU x) (ArrayU y) = fmap (pure . ArrayU) $ A.divide x y
 
+-- | ◿
+--
+-- >>> run [i|◿10 27|]
+-- 7
+-- >>> run [i|◿5 [3 7 14]|]
+-- [3 2 4]
 modulus :: ArrayU -> ArrayU -> Res
-modulus (ArrayU x) (ArrayU y) = fmap (pure . ArrayU) $ A.modulusD x y
+modulus (ArrayU x) (ArrayU y) = fmap (pure . ArrayU) $ A.modulus x y
 
+-- | doctest bug
+--
 power :: ArrayU -> ArrayU -> Res
 power (ArrayU x) (ArrayU y) = fmap (pure . ArrayU) $ A.power x y
 
+-- | doctest bug
+--
 logarithm :: ArrayU -> ArrayU -> Res
-logarithm (ArrayU x) (ArrayU y) = fmap (pure . ArrayU) $ A.power x y
+logarithm (ArrayU x) (ArrayU y) = fmap (pure . ArrayU) $ A.logarithm x y
 
+-- | ↧
+--
+-- >>> run [i|↧ 3 5|]
+-- 3
+-- >>> run [i|↧ [1 4 2] [3 7 1]|]
+-- [1 4 1]
 minimum :: ArrayU -> ArrayU -> Res
 minimum (ArrayU x) (ArrayU y) = fmap (pure . ArrayU) $ A.minimum x y
 
+-- | ↥
+--
+-- >>> run [i|↥ 3 5|]
+-- 5
+-- >>> run [i|↥ [1 4 2] [3 7 1]|]
+-- [3 7 2]
 maximum :: ArrayU -> ArrayU -> Res
 maximum (ArrayU x) (ArrayU y) = fmap (pure . ArrayU) $ A.maximum x y
 
-arctangent :: ArrayU -> ArrayU -> Res
-arctangent (ArrayU x) (ArrayU y) = fmap (pure . ArrayU) $ A.arctangent x y
+
+-- | ∠
+--
+-- >>> run [i|∠ 1 0|]
+-- 1.5707963267948966
+-- >>> run [i|∠ ¯1 0|]
+-- ¯1.5707963267948966
+atangent :: ArrayU -> ArrayU -> Res
+atangent (ArrayU x) (ArrayU y) = fmap (pure . ArrayU) $ A.atangent x y
+
 
 match :: ArrayU -> ArrayU -> Res
 match (ArrayU x) (ArrayU y) = Right . pure . ArrayU . fmap fromIntegral $ A.match x y
@@ -338,47 +533,126 @@ keep (ArrayU x) (ArrayU y) = Right . pure . ArrayU $ (A.keep (fmap asInt x) y)
 find:: ArrayU -> ArrayU -> Res
 find (ArrayU x) (ArrayU y) = Right . pure . ArrayU . fmap fromIntegral $ A.find x y
 
+-- | /=
+--
+-- >>> run [i|/=[0_1_0 0_4_3]|]
+-- [1 0 0]
 equalsR :: ArrayU -> Res
 equalsR (ArrayU x) = Right . pure . ArrayU . fmap fromIntegral $ A.equalsR x
 
+-- | /≠
+--
+-- >>> run [i|/≠[0_1_0 0_4_3]|]
+-- [0 1 1]
 notEqualsR :: ArrayU -> Res
 notEqualsR (ArrayU x) = Right . pure . ArrayU . fmap fromIntegral $ A.notEqualsR x
 
+-- | /<
+--
+-- >>> run [i|/<[2_1_0 0_4_3]|]
+-- [1 0 0]
 lessThanR :: ArrayU -> Res
 lessThanR (ArrayU x) = Right . pure . ArrayU . fmap fromIntegral $ A.lessThanR x
 
+-- | /≤
+--
+-- >>> run [i|/≤[0_1_0 0_4_3]|]
+-- [1 0 0]
 lessOrEqualR :: ArrayU -> Res
 lessOrEqualR (ArrayU x) = Right . pure . ArrayU . fmap fromIntegral $ A.lessOrEqualR x
 
+-- | />
+--
+-- >>> run [i|/>[0_1_0 0_4_3]|]
+-- [0 1 1]
 greaterThanR :: ArrayU -> Res
 greaterThanR (ArrayU x) = Right . pure . ArrayU . fmap fromIntegral $ A.greaterThanR x
 
+-- | /≥
+--
+-- >>> run [i|/≥[0_1_0 0_4_3]|]
+-- [1 1 1]
 greaterOrEqualR :: ArrayU -> Res
 greaterOrEqualR (ArrayU x) = Right . pure . ArrayU . fmap fromIntegral $ A.greaterOrEqualR x
 
+
+-- | /+
+--
+-- >>> run [i|/+[0_1_0 0_4_3]|]
+-- [0 5 3]
 addR :: ArrayU -> Res
 addR (ArrayU x) = Right $ pure $ ArrayU $ A.addR x
 
+-- | /-
+--
+-- >>> run [i|/- 1_2_3|]
+-- 2
+-- >>> run [i|/- [1_2_3 4_5_6]|]
+-- [3 3 3]
 subtractR :: ArrayU -> Res
 subtractR (ArrayU x) = Right $ pure $ ArrayU $ A.subtractR x
 
+-- | /×
+--
+-- >>> run [i|/× 1_2_3|]
+-- 6
+-- >>> run [i|/× [1_2_3 4_5_6]|]
+-- [4 10 18]
 multiplyR :: ArrayU -> Res
 multiplyR (ArrayU x) = Right $ pure $ ArrayU $ A.multiplyR x
 
+-- | /÷
+--
+-- >>> run [i|/÷ 1_2_3|]
+-- 1.5
+-- >>> run [i|/÷ [1_2_3 4_5_6]|]
+-- [4 2.5 2]
 divideR :: ArrayU -> Res
 divideR (ArrayU x) = Right $ pure $ ArrayU $ A.divideR x
 
+-- | /◿
+--
+-- >>> run [i|/◿ []|]
+-- Infinity
+-- >>> run [i|/◿ [2]|]
+-- 2
+-- >>> run [i|/◿ 2_1|]
+-- 1
+-- >>> run [i|/◿ [1_2_3 4_5_6]|]
+-- [0 1 0]
 modulusR :: ArrayU -> Res
-modulusR (ArrayU x) = Right $ pure $ ArrayU $ fmap fromIntegral $ A.modulusR (fmap asInt x)
+modulusR (ArrayU x) = Right $ pure $ ArrayU $ A.modulusR x
 
+-- | doctest subscript bug. see readme for test
 powerR :: ArrayU -> Res
 powerR (ArrayU x) = Right $ pure $ ArrayU $ A.powerR x
 
+-- | doctest subscript bug. see readme for test
 logarithmR :: ArrayU -> Res
-logarithmR (ArrayU x) = Right $ pure $ ArrayU $ A.logarithmR x
+logarithmR (ArrayU x) = fmap (pure . ArrayU) $ A.logarithmR x
 
+-- | /↧
+--
+-- >>> run [i|/↧ []|]
+-- Infinity
+-- >>> run [i|/↧ [2]|]
+-- 2
+-- >>> run [i|/↧ 2_1|]
+-- 1
+-- >>> run [i|/↧ [1_2_3 4_5_6]|]
+-- [1 2 3]
 minimumR :: ArrayU -> Res
 minimumR (ArrayU x) = Right $ pure $ ArrayU $ A.minimumR x
 
+-- | /↥
+--
+-- >>> run [i|/↥ []|]
+-- ¯Infinity
+-- >>> run [i|/↥[2]|]
+-- 2
+-- >>> run [i|/↥ 2_1|]
+-- 2
+-- >>> run [i|/↥ [1_2_3 4_5_6]|]
+-- [4 5 6]
 maximumR :: ArrayU -> Res
 maximumR (ArrayU x) = Right $ pure $ ArrayU $ A.maximumR x

@@ -2,6 +2,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeApplications #-}
 
 -- | Various <https://hackage.haskell.org/package/flatparse flatparse> helpers and combinators.
 module Huihua.Parse.FlatParse
@@ -36,8 +37,10 @@ module Huihua.Parse.FlatParse
     bracketedSB,
     wrapped,
     digit,
+    digits,
     int,
     double,
+    minus,
     signed,
     byteStringOf',
     comma,
@@ -307,9 +310,13 @@ int = do
     _ -> pure n
 
 digits :: Parser e (Int, Int)
-digits = chainr (\n (!place, !acc) -> (place * 10, acc + place * n)) digit (pure (1, 0))
+digits = do
+  (place, n) <- chainr (\n (!place, !acc) -> (place * 10, acc + place * n)) digit (pure (1, 0))
+  case place of
+    1 -> empty
+    _ -> pure (place, n)
 
--- | A 'Double' parser.
+-- | A 'Double' parser. uiua does not parse .1 as a double.
 --
 -- >>> runParser double "1.234x"
 -- OK 1.234 "x"
@@ -321,18 +328,18 @@ digits = chainr (\n (!place, !acc) -> (place * 10, acc + place * n)) digit (pure
 -- OK 123.0 ""
 --
 -- >>> runParser double ".123"
--- OK 0.123 ""
+-- Fail
 --
 -- >>> runParser double "123."
--- OK 123.0 ""
+-- OK 123.0 "."
 double :: Parser e Double
 double = do
   (placel, nl) <- digits
   withOption
     ($(char '.') *> digits)
     ( \(placer, nr) ->
-        case (placel, placer) of
-          (1, 1) -> empty
+        case placel of
+          1 -> empty
           _ -> pure $ fromIntegral nl + fromIntegral nr / fromIntegral placer
     )
     ( case placel of
@@ -341,11 +348,14 @@ double = do
     )
 
 minus :: Parser e ()
-minus = $(char '-')
+minus = $(char '-') <|> byteString "¯"
 
--- | Parser for a signed prefix to a number.
+-- | Parser for a signed prefix to a number. Unlike uiua, this parses '-' as a negative number prefix.
 --
 -- >>> runParser (signed double) "-1.234x"
+-- OK (-1.234) "x"
+--
+-- >>> runParser (signed double) "¯1.234x"
 -- OK (-1.234) "x"
 signed :: (Num b) => Parser e b -> Parser e b
 signed p = do

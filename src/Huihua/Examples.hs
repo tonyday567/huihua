@@ -9,12 +9,58 @@ import Data.Text.Encoding (encodeUtf8)
 -- $setup
 -- >>> :set -XOverloadedStrings
 -- >>> import NumHask.Prelude
+-- >>> import Data.String.Interpolate
 -- >>> import Huihua.Examples
 -- >>> import Huihua.Parse as P
 -- >>> import NumHask.Array.Dynamic as A
 -- >>> import Data.List qualified as List
 -- >>> import Data.ByteString.Char8 qualified as C
 -- >>> import FlatParse.Basic
+--
+-- yet to be implemented
+--
+-- multi-line arrays
+--
+-- >>> run nyiMultiArray
+-- 7
+-- 8
+-- 9
+--
+--
+-- ... format
+-- >>> run [i|÷ 3 1|]
+-- 0.3333333333333333
+--
+-- Implemented:
+--
+-- broadcasting scalars (and prefixed arrays?)
+--
+-- >>> run [i|<2 [1 2 3]|]
+-- [1 0 0]
+--
+-- multi-dim bool reductions
+-- >>> run [i|/<[2_1_0 0_4_3]|]
+-- [1 0 0]
+--
+-- operators and stuff inside square brackets
+--
+-- >>> run "[. 1 2 3 4]"
+-- [1 1 2 3 4]
+--
+-- display negate sign for numbers
+--
+-- >>> run [i|¯1|]
+-- ¯1
+--
+-- strand square bracket combination
+--
+-- >>> run [i|[1_2 3_4 5_6]|]
+-- ╭─
+-- ╷ 1 2
+--   3 4
+--   5 6
+--       ╯
+
 
 -- |
 --
@@ -60,4 +106,11 @@ exPage3 = [i|
 "Unabashedly I utilize arrays"
 ≠@ . \# Mask of non-spaces
 ⊜⊢   \# All first letters
+|]
+
+nyiMultiArray :: ByteString
+nyiMultiArray = [i|
+[1 2 3
+ 4 5 6
+ 7 8 9]
 |]

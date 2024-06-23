@@ -22,6 +22,7 @@ import Data.ByteString.Char8 qualified as C
 import Control.Monad
 import Prettyprinter
 import Huihua.Glyphs
+import Data.Bifunctor
 
 -- $setup
 -- >>> :set -XOverloadedStrings
@@ -33,12 +34,12 @@ import Huihua.Glyphs
 
 -- |
 --
-data Token = StringToken ByteString | GlyphToken Glyph | IntToken Int | DoubleToken Double | CharacterToken Char | NameToken String | CommentToken ByteString | TypeToken deriving (Eq, Ord, Show)
+data Token = StringToken ByteString | GlyphToken Glyph | DoubleToken Double | CharacterToken Char | NameToken String | CommentToken ByteString | TypeToken deriving (Eq, Ord, Show)
 
 -- | Double token has precedence over duplicate
 token :: Parser e Token
 token =
-  ((\x -> bool (DoubleToken x) (IntToken (P.floor x)) (x==(fromIntegral . P.floor) x)) <$> double) FP.<|>
+  (DoubleToken <$> double) FP.<|>
   (CharacterToken <$> ($(char '@') *> anyChar)) FP.<|>
   (CommentToken <$> ($(char '#') *> takeRest)) FP.<|>
   (GlyphToken <$> glyphP) FP.<|>
@@ -97,12 +98,6 @@ aComment = Assembler $ \xs -> case xs of
 aDouble :: Assembler Token Double
 aDouble = Assembler $ \xs -> case xs of
   (DoubleToken d:xs) -> Just (d, xs)
-  (IntToken i:xs) -> Just (fromIntegral i, xs)
-  _ -> Nothing
-
-aInt :: Assembler Token Int
-aInt = Assembler $ \xs -> case xs of
-  (IntToken i:xs) -> Just (i, xs)
   _ -> Nothing
 
 aChar :: Assembler Token Char
@@ -141,7 +136,7 @@ aToken = Assembler $ \xs -> case xs of
   (x:xs) -> Just (x, xs)
   _ -> Nothing
 
-data Instruction = IOp Glyph | IReduceOp Glyph | IArray (Array Double) | INYI Token deriving (Show, Eq)
+data Instruction = IOp Glyph | IReduceOp Glyph | WArray (Array Instruction) | IArray (Array Double) | INYI Token deriving (Show, Eq)
 
 aInstruction :: Assembler Token Instruction
 aInstruction =
@@ -149,7 +144,8 @@ aInstruction =
   (IOp <$> aOp) P.<|>
   (IArray <$> aArray aDouble) P.<|>
   (IArray <$> aArrayStrand aDouble) P.<|>
-  (INYI <$> aToken)
+  (WArray <$> aArray aInstruction) P.<|>
+  (IArray . D.toScalar <$> aDouble)
 
 aInstructions :: Assembler Token [Instruction]
 aInstructions = many aInstruction
@@ -165,7 +161,7 @@ parseI bs = parseT bs & instructionize
 
 -- |
 -- >>> parseT exPage1
--- [GlyphToken Divide,GlyphToken Length,GlyphToken Flip,GlyphToken Reduce,GlyphToken Add,GlyphToken Duplicate,GlyphToken ArrayLeft,IntToken 1,IntToken 5,IntToken 8,IntToken 2,GlyphToken ArrayRight]
+-- [GlyphToken Divide,GlyphToken Length,GlyphToken Flip,GlyphToken Reduce,GlyphToken Add,GlyphToken Duplicate,GlyphToken ArrayLeft,DoubleToken 1.0,DoubleToken 5.0,DoubleToken 8.0,DoubleToken 2.0,GlyphToken ArrayRight]
 parseT :: ByteString -> [Token]
 parseT bs = bs & C.lines & fmap (runParser_ tokens) & List.reverse & mconcat & filter (P.not . isComment)
 
@@ -176,22 +172,27 @@ isComment _ = False
 istep :: Instruction -> Stack -> Either HuihuaWarning Stack
 istep (IOp op) s = applyOp op s
 istep (IArray x) (Stack s) = Right (Stack (ArrayU x:s))
+istep (WArray x) (Stack s) = second (Stack . (:s) . ArrayU) a
+  where
+    a = case interpI (D.arrayAs x) of
+          (Right (Stack xs)) -> Data.Bifunctor.first (const RaggedInternal) (D.joinSafe (D.asArray (fmap arrayd xs)))
+          (Left w) -> Left w
 istep (IReduceOp op) s = applyReduceOp op s
 istep _ (Stack _) = Left NYI
 
 -- | compute a list of instructions executing from right to left.
 --
--- >>> interpI (List.reverse $ parseI exPage1)
+-- >>> interpI (parseI exPage1)
 -- Right (Stack {stackList = [ArrayU {arrayd = UnsafeArray [] [4.0]}]})
 interpI :: [Instruction] -> Either HuihuaWarning Stack
-interpI as = foldr (>=>) pure (fmap istep as) (Stack [])
+interpI as = foldr (>=>) pure (fmap istep (List.reverse as)) (Stack [])
 
 -- |
 --
 -- >>> run exPage1
 -- 4
 run :: ByteString -> Doc ann
-run bs = either viaShow pretty (interpI (List.reverse $ parseI bs))
+run bs = either viaShow pretty (interpI (parseI bs))
 
 -- >>> sequence_ $ C.putStr <$> (ts <> ["\n"])
 -- .,∶;∘¬±¯⌵√○⌊⌈⁅=≠&lt;≤&gt;≥+-×÷◿ⁿₙ↧↥∠⧻△⇡⊢⇌♭⋯⍉⍏⍖⊚⊛⊝□⊔≅⊟⊂⊏⊡↯↙↘↻◫▽⌕∊⊗/∧\∵≡∺⊞⊠⍥⊕⊜⍘⋅⊙∩⊃⊓⍜⍚⬚'?⍣⍤!⎋↬⚂ηπτ∞~_[]{}()¯@$"←|
@@ -209,7 +210,7 @@ glyphP =
             "." -> pure Duplicate
             "," -> pure Over
             ":" -> pure Flip
-            ";" -> pure Pop
+            "◌" -> pure Pop
             "⟜" -> pure On
             "⊸" -> pure By
             "?" -> pure Stack'
@@ -230,15 +231,15 @@ glyphP =
             "¯" -> pure Negate
             "⌵" -> pure AbsoluteValue
             "√" -> pure Sqrt
-            "○" -> pure Sine
+            "∿" -> pure Sine
             "⌊" -> pure Floor
             "⌈" -> pure Ceiling
             "⁅" -> pure Round
             "=" -> pure Equals
             "≠" -> pure NotEquals
-            "&lt;" -> pure LessThan
+            "<" -> pure LessThan
             "≤" -> pure LessOrEqual
-            "&gt;" -> pure GreaterThan
+            ">" -> pure GreaterThan
             "≥" -> pure GreaterOrEqual
             "+" -> pure Add
             "-" -> pure Subtract
