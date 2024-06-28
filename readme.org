@@ -43,7 +43,7 @@ import Prettyprinter hiding (equals)
 #+begin_example
 Build profile: -w ghc-9.8.2 -O1
 In order, the following will be built (use -v for more details):
- - huihua-0.0.1 (lib) (file src/Huihua/ArrayU.hs changed)
+ - huihua-0.0.1 (lib) (file /Users/tonyday567/haskell/huihua/dist-newstyle/build/aarch64-osx/ghc-9.8.2/numhask-array-0.12/cache/build changed)
 Preprocessing library for huihua-0.0.1..
 GHCi, version 9.8.2: https://www.haskell.org/ghc/  :? for help
 [1 of 8] Compiling Huihua.Examples  ( src/Huihua/Examples.hs, interpreted )
@@ -58,91 +58,384 @@ Ok, 8 modules loaded.
 Ok, 8 modules loaded.
 #+end_example
 
+
+
 ** scratchpad
-
 #+begin_src haskell-ng :results output
-a = D.iota [3,4]
-pretty a
-(x D.:| xs) = a
-x
-xs
-D.extracts [1] xs
-D.zips [0] (D.zipWithE (\x' xs' -> foldl' (+) (D.fromScalar x') xs')) (D.extracts [0] x) (D.extractsExcept [0] xs)
-
-
+:t all
 #+end_src
 
 #+RESULTS:
-: [[0,1,2,3],
-:  [4,5,6,7],
-:  [8,9,10,11]]
-: UnsafeArray [4] [0,1,2,3]
-: UnsafeArray [2,4] [4,5,6,7,8,9,10,11]
-: UnsafeArray [4] [UnsafeArray [2] [4,8],UnsafeArray [2] [5,9],UnsafeArray [2] [6,10],UnsafeArray [2] [7,11]]
-: UnsafeArray [4] [12,15,18,21]
+: all :: Foldable t => (a -> Bool) -> t a -> Bool
+
+** find & mask
+
+findNoOverlap deconstruction
 
 #+begin_src haskell-ng :results output
-xy a = let (x D.:| xs) = a in D.zipWithE (\a as -> foldl' (+) a as) x (D.extractsExcept [0] xs)
+a = D.cycle [7,7] (D.iota [3]) :: Array Int
+i = D.array [2,2] [1,2,2,0] :: Array Int
+pretty $ fmap sig $ D.findNoOverlap i a
 #+end_src
 
 #+RESULTS:
+: [[0,1,0,0,1,0],
+:  [0,0,0,0,0,0],
+:  [0,0,1,0,0,1],
+:  [0,0,0,0,0,0],
+:  [1,0,0,1,0,0],
+:  [0,0,0,0,0,1]]
 
 #+begin_src haskell-ng :results output
-let a3 = D.iota [2,3,4]
-reduceU (+) zero a3
-xy a3
+a = D.cycle [7,7] (D.iota [3]) :: Array Int
+i = D.array [2,2] [1,2,2,0] :: Array Int
+    iexp = D.rerank (D.rank a) i
+    f = D.find iexp a
+    cl sh = List.filter (\xs -> P.not (any (>0) (List.init xs))) $ List.filter (P.not . (all (>=0))) $ D.arrayAs $ D.tabulate ((\x -> 2 * x - 1) <$> sh) (\s -> List.zipWith (\x x0 -> x - x0 + 1) s sh)
+    inside x' x = all id $ List.zipWith (\y' y -> y >= 0 && y < y') x' x
+    go r' s = D.index f s && all P.not (D.index r' <$> (List.filter (inside (D.shape f)) $ fmap (List.zipWith (+) s) (cl (D.shape iexp))))
+    r = D.tabulate (D.shape f) (go r)
+    pretty $ fmap sig $ D.find i a
+    pretty $ fmap sig r
+    #+end_src
+
+*** tests
+
+#+begin_src haskell-ng :results output
+a = D.iota [2,2] :: Array Int
+i = D.toScalar 2 :: Array Int
+D.find i a
+D.findNoOverlap i a
+A.find i a
+A.mask i a
 #+end_src
 
 #+RESULTS:
-: UnsafeArray [3,4] [12,14,16,18,20,22,24,26,28,30,32,34]
-: UnsafeArray [3,4] [12,14,16,18,20,22,24,26,28,30,32,34]
+: UnsafeArray [2,2] [False,False,True,False]
+: UnsafeArray [2,2] [False,False,True,False]
+: UnsafeArray [2,2] [0,0,1,0]
+: UnsafeArray [2,2] [0,0,1,0]
 
 #+begin_src haskell-ng :results output
-import Prelude qualified
-:t Prelude.mod infinity (Prelude.3)
+a = D.iota [4] :: Array Int
+i = D.array [1] [2] :: Array Int
+D.find i a
+D.findNoOverlap i a
+A.find i a
+A.mask i a
+#+end_src
+
+#+RESULTS:
+: UnsafeArray [4] [False,False,True,False]
+: UnsafeArray [4] [False,False,True,False]
+: UnsafeArray [4] [0,0,1,0]
+: UnsafeArray [4] [0,0,1,0]
+
+
+#+begin_src haskell-ng :results output
+a = D.iota [2,3,4] :: Array Int
+i = D.array [2,2] [0,1,4,5] :: Array Int
+D.find i a
+D.findNoOverlap i a
+A.find i a
+pretty $ A.mask i a
+#+end_src
+
+#+RESULTS:
+: UnsafeArray [2,2,3] [True,False,False,False,False,False,False,False,False,False,False,False]
+: UnsafeArray [2,2,3] [True,False,False,False,False,False,False,False,False,False,False,False]
+: UnsafeArray [2,3,4] [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
+: [[[1,1,0,0],
+:   [1,1,0,0],
+:   [0,0,0,0]],
+:  [[0,0,0,0],
+:   [0,0,0,0],
+:   [0,0,0,0]]]
+
+#+begin_src haskell-ng :results output
+a = D.cycle [4,4] (D.iota [3]) :: Array Int
+i = D.array [2] [1,2] :: Array Int
+pretty $ D.find i a
+pretty $ D.findNoOverlap i a
+pretty $ A.find i a
+pretty $ A.mask i a
 #+end_src
 
 #+RESULTS:
 #+begin_example
-Build profile: -w ghc-9.8.2 -O1
-In order, the following will be built (use -v for more details):
- - huihua-0.0.1 (lib) (file src/Huihua/ArrayU.hs changed)
-Preprocessing library for huihua-0.0.1..
-GHCi, version 9.8.2: https://www.haskell.org/ghc/  :? for help
-[1 of 8] Compiling Huihua.Examples  ( src/Huihua/Examples.hs, interpreted )
-[2 of 8] Compiling Huihua.Parse.FlatParse ( src/Huihua/Parse/FlatParse.hs, interpreted )
-[3 of 8] Compiling Huihua.Warning   ( src/Huihua/Warning.hs, interpreted )
-[4 of 8] Compiling Huihua.Array     ( src/Huihua/Array.hs, interpreted )
-
-src/Huihua/Array.hs:495:35: error: [GHC-83865]
-    • Couldn't match expected type: Array a -> Array b
-                  with actual type: Array a
-    • Possible cause: ‘D.reduces’ is applied to too many arguments
-      In the expression: D.reduces [0] (foldl' (flip f) x) xs
-      In an equation for ‘reduceNoIdentityU’:
-          reduceNoIdentityU f (x D.:| xs)
-            = D.reduces [0] (foldl' (flip f) x) xs
-    • Relevant bindings include
-        xs :: Array a (bound at src/Huihua/Array.hs:495:29)
-        x :: Array a (bound at src/Huihua/Array.hs:495:22)
-        f :: a -> a -> a (bound at src/Huihua/Array.hs:495:19)
-        reduceNoIdentityU :: (a -> a -> a) -> a -> Array a -> Array b
-          (bound at src/Huihua/Array.hs:495:1)
-    |
-495 | reduceNoIdentityU f (x D.:| xs) = D.reduces [0] (foldl' (flip f) x) xs
-    |                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Failed, three modules loaded.
-<interactive>:1:13: error: [GHC-88464]
-    Variable not in scope: infinity :: a -> c
-
-<interactive>:1:23: error: [GHC-88464]
-    Data constructor not in scope: Prelude :: b0 -> c
+[[False,True,False],
+ [True,False,False],
+ [False,False,True],
+ [False,True,False]]
+[[False,True,False],
+ [True,False,False],
+ [False,False,True],
+ [False,True,False]]
+[[0,1,0,0],
+ [1,0,0,0],
+ [0,0,1,0],
+ [0,1,0,0]]
+[[0,1,1,0],
+ [2,2,0,0],
+ [0,0,3,3],
+ [0,4,4,0]]
 #+end_example
+
+
+#+begin_src haskell-ng :results output
+a = D.konst [5,5] 1 :: Array Int
+i = D.konst [2,2] 1 :: Array Int
+D.find i a
+pretty $ D.findNoOverlap i a
+pretty $ A.find i a
+pretty $ A.mask i a
+#+end_src
+
+#+RESULTS:
+#+begin_example
+UnsafeArray [4,4] [True,True,True,True,True,True,True,True,True,True,True,True,True,True,True,True]
+[[True,False,True,False],
+ [False,False,False,False],
+ [True,False,True,False],
+ [False,False,False,False]]
+[[1,1,1,1,0],
+ [1,1,1,1,0],
+ [1,1,1,1,0],
+ [1,1,1,1,0],
+ [0,0,0,0,0]]
+[[1,1,2,2,0],
+ [1,1,2,2,0],
+ [3,3,4,4,0],
+ [3,3,4,4,0],
+ [0,0,0,0,0]]
+#+end_example
+
+
+#+begin_src haskell-ng :results output
+a = D.cycle [4,4] (D.iota [3]) :: Array Int
+i = D.array [2,2] [1,2,2,0] :: Array Int
+D.find i a
+pretty $ D.findNoOverlap i a
+pretty $ A.find i a
+pretty $ A.mask i a
+#+end_src
+
+#+RESULTS:
+#+begin_example
+UnsafeArray [3,3] [False,True,False,True,False,False,False,False,True]
+[[False,True,False],
+ [False,False,False],
+ [False,False,True]]
+[[0,1,0,0],
+ [1,0,0,0],
+ [0,0,1,0],
+ [0,0,0,0]]
+[[0,1,1,0],
+ [0,1,1,0],
+ [0,0,2,2],
+ [0,0,2,2]]
+#+end_example
+
+#+begin_src haskell-ng :results output
+run [i|⌕ [1_2 2_0] ↯4_4⇡3|]
+#+end_src
+
+#+RESULTS:
+: ╭─
+: ╷ 0 1 0 0
+:   1 0 0 0
+:   0 0 1 0
+:   0 0 0 0
+:           ╯
+
+#+begin_src haskell-ng :results output
+run [i|⦷ [1_2 2_0] ↯4_4⇡3|]
+#+end_src
+
+#+RESULTS:
+: ╭─
+: ╷ 0 1 1 0
+:   0 1 1 0
+:   0 0 2 2
+:   0 0 2 2
+:           ╯
+
+** find
+
+
+
+#+begin_src haskell-ng :results output
+run[i|⌕ [1_2 2_0] .↯4_4_4⇡3|]
+#+end_src
+
+#+RESULTS:
+#+begin_example
+╭─
+╷ 0 1 0 0
+╷ 1 0 0 1
+  0 0 1 0
+  0 0 0 0
+
+  1 0 0 1
+  0 0 1 0
+  0 1 0 0
+  0 0 0 0
+
+  0 0 1 0
+  0 1 0 0
+  1 0 0 1
+  0 0 0 0
+
+  0 0 0 0
+  0 0 0 0
+  0 0 0 0
+  0 0 0 0
+          ╯
+╭─
+╷ 0 1 2 0
+╷ 1 2 0 1
+  2 0 1 2
+  0 1 2 0
+
+  1 2 0 1
+  2 0 1 2
+  0 1 2 0
+  1 2 0 1
+
+  2 0 1 2
+  0 1 2 0
+  1 2 0 1
+  2 0 1 2
+
+  0 1 2 0
+  1 2 0 1
+  2 0 1 2
+  0 1 2 0
+          ╯
+#+end_example
+
+#+begin_src haskell-ng :results output
+a = D.cycle [4,4] (D.iota [3]) :: Array Int
+i = D.array [2,2] [1,2,2,0] :: Array Int
+pretty a
+pretty i
+pretty $ A.find a i
+ws = D.windows (D.shape i) a
+-- D.shape ws :: [Int]
+-- pretty ws
+-- pretty a
+-- fmap (sig . (==i)) (D.extracts (D.arrayAs (D.iota [D.rank i]) <> [D.rank i * 2 .. (D.rank ws - 1)]) ws)
+
+#+end_src
+
+#+RESULTS:
+: [[0,1,2,0],
+:  [1,2,0,1],
+:  [2,0,1,2],
+:  [0,1,2,0]]
+: [[1,2],
+:  [2,0]]
+: [[0,0],
+:  [0,0]]
+
+** window
+
+#+begin_src haskell-ng :results output
+D.shape @[Int] $ D.windows [2,2] (D.iota [4,3,2])
+#+end_src
+
+#+RESULTS:
+: [3,2,2,2,2]
+
+#+begin_src haskell-ng :results output
+pretty $ D.windows [2] (D.iota [4])
+#+end_src
+
+#+RESULTS:
+: [[0,1],
+:  [1,2],
+:  [2,3]]
+
+#+begin_src haskell-ng :results output
+pretty $ D.windows [4] (D.iota [6])
+#+end_src
+
+#+RESULTS:
+: [[0,1,2,3],
+:  [1,2,3,4],
+:  [2,3,4,5]]
+
+Consistent for scalars
+
+#+begin_src haskell-ng :results output
+D.windows [1] (D.toScalar 5)
+#+end_src
+
+#+RESULTS:
+: UnsafeArray [1] [5]
+
+#+begin_src haskell-ng :results output
+:{
+run [i|
+△ .◫2 .⇡4
+△ .◫4 .⇡6
+△ ◫2_2 .[1_2_3 4_5_6 7_8_9]
+△ .◫¯2 .↯4_4⇡16
+△ .◫¯3 .↯4_4⇡16
+△ .◫¯1_2 .↯4_4⇡16
+
+|]
+:}
+#+end_src
+
+#+begin_src haskell-ng :results output
+:{
+run [i|
+△ ◫2 ⇡4
+
+|]
+:}
+#+end_src
+
+#+RESULTS:
+: ghci| ghci| ghci| ghci| ghci| [3 2]
+: ╭─
+: ╷ 0 1
+:   1 2
+:   2 3
+:       ╯
+
+#+begin_src haskell-ng :results output
+
+#+end_src
+
+
+** keep
+
+#+begin_src haskell-ng :results output
+
+i = D.asArray [3,2] :: Array Int
+x = D.asArray [8,3,9,2,0] :: Array Int
+D.asArray $ fold $ D.zipWithE (replicate) (D.cycle (D.shape x) i) x
+#+end_src
+
+#+RESULTS:
+: UnsafeArray [13] [8,8,8,3,3,9,9,9,2,2,0,0,0]
+
+#+begin_src haskell-ng :results output
+i = D.asArray [3,2] :: Array Int
+x = D.asArray [8,3,9,2,0] :: Array Int
+x2 = D.iota [3,4] :: Array Int
+D.join $ D.asArray $ fold $ D.zipWithE replicate (D.cycle (List.take 1 $ D.shape x2) i) (D.extracts [0] x2)
+#+end_src
+
+#+RESULTS:
+: UnsafeArray [8,4] [0,1,2,3,0,1,2,3,0,1,2,3,4,5,6,7,4,5,6,7,8,9,10,11,8,9,10,11,8,9,10,11]
 
 ** parser debug pipeline
 
 #+begin_src haskell-ng :results output
-x = [i|/- [1 2 3]|]
+x = [i|↙¯2_¯2 ↯3_4⇡12|]
 runParser tokens x
 parseT x
 xis = parseT x & instructionize
@@ -151,10 +444,10 @@ run x
 #+end_src
 
 #+RESULTS:
-: OK [GlyphToken Reduce,GlyphToken Subtract,GlyphToken ArrayLeft,DoubleToken 1.0,DoubleToken 2.0,DoubleToken 3.0,GlyphToken ArrayRight] ""
-: [GlyphToken Reduce,GlyphToken Subtract,GlyphToken ArrayLeft,DoubleToken 1.0,DoubleToken 2.0,DoubleToken 3.0,GlyphToken ArrayRight]
-: Right (Stack {stackList = [ArrayU {arrayd = UnsafeArray [] [-6.0]}]})
-: ¯6
+: OK [GlyphToken Take,GlyphToken Negate,DoubleToken 2.0,GlyphToken Strand,GlyphToken Negate,DoubleToken 2.0,GlyphToken Reshape,DoubleToken 3.0,GlyphToken Strand,DoubleToken 4.0,GlyphToken Range,DoubleToken 12.0] ""
+: [GlyphToken Take,GlyphToken Negate,DoubleToken 2.0,GlyphToken Strand,GlyphToken Negate,DoubleToken 2.0,GlyphToken Reshape,DoubleToken 3.0,GlyphToken Strand,DoubleToken 4.0,GlyphToken Range,DoubleToken 12.0]
+: Left EmptyStack2
+: EmptyStack2
 
 #+begin_src haskell-ng :results output
 D.folds [] (foldl' (+) zero) (D.array [4] [5, 1, 8, 2] :: Array Double)
@@ -408,16 +701,17 @@ run [i|/ⁿ [1_2_3 4_5_6]|]
 #+begin_src haskell-ng :results output
 run [i|/ₙ[]|]
 run [i|/ₙ [2]|] -- 2
-run [i|/ₙ 2_1|] -- 0
-run [i|/ₙ [4_5_6 1_2_3]|] -- [∞ 2.321928094887362 1.6309297535714575]
-
+run [i|/ₙ 2_8|] -- 3
+run [i|/ₙ [1_2_3 4_5_6]|] -- [∞ 2.321928094887362 1.6309297535714575]
+logBase 2 8
 #+end_src
 
 #+RESULTS:
 : NoIdentity
-: [2]
-: Infinity
+: 2
+: 2.9999999999999996
 : [Infinity 2.321928094887362 1.6309297535714573]
+: 2.9999999999999996
 
 ** reduce1U dev
 

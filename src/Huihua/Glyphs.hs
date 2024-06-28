@@ -383,7 +383,7 @@ applyNonadic _ = Left NYI
 applyMonadic :: Glyph -> ArrayU -> Res
 applyMonadic Not x = U.not x
 applyMonadic Sign x = U.sign x
-applyMonadic Negate x = U.negate x
+applyMonadic Negate x = U.negate' x
 applyMonadic AbsoluteValue x = U.absoluteValue x
 applyMonadic Sqrt x = U.sqrt x
 applyMonadic Sine x = U.sine x
@@ -436,8 +436,8 @@ applyDyadic Rotate x y = U.rotate x y
 applyDyadic Windows x y = U.windows x y
 applyDyadic Keep x y = U.keep x y
 applyDyadic Find x y = U.find x y
+applyDyadic Mask x y = U.mask x y
 -- FIXME:
-applyDyadic Mask _ _ = undefined
 applyDyadic Member _ _ = undefined
 applyDyadic IndexOf _ _ = undefined
 applyDyadic _ _ _ = Left NYI

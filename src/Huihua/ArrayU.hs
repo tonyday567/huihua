@@ -26,7 +26,7 @@ module Huihua.ArrayU
     identity,
     not,
     sign,
-    negate,
+    negate',
     absoluteValue,
     sqrt,
     sine,
@@ -79,6 +79,7 @@ module Huihua.ArrayU
     windows,
     keep,
     find,
+    mask,
 
     -- * reductions
     equalsR,
@@ -102,7 +103,7 @@ where
 import Huihua.Array qualified as A
 import NumHask.Array.Dynamic (Array (..))
 import NumHask.Array.Dynamic qualified as D
-import NumHask.Prelude hiding (not, negate, sqrt, sin, floor, ceiling, round, minimum, maximum, length, reverse, fix, take, drop, find)
+import NumHask.Prelude hiding (not, sqrt, sin, floor, ceiling, round, minimum, maximum, length, reverse, fix, take, drop, find)
 import NumHask.Prelude qualified as P
 import Huihua.Warning
 import Prettyprinter hiding (equals)
@@ -143,7 +144,7 @@ instance Pretty ArrayU where
     s = fmap (fmap ((D.zipWithE (\m a -> lpad ' ' m a) maxp))) t
     sdoc = mconcat $ fmap (either (\n -> replicate (n-1) mempty) (pure . hsep . fmap pretty . D.arrayAs)) s
     sdocMin = D.concatenate 0 (D.konst [max 0 (D.rank x - P.length sdoc - 1)] mempty) (D.asArray sdoc)
-    rankPrefix = fmap pretty (D.reshapeDef " " [D.length sdocMin] (D.konst [D.rank x - 1] "╷"))
+    rankPrefix = fmap pretty (D.pad " " [D.length sdocMin] (D.konst [D.rank x - 1] "╷"))
     deco = zipWith (<+>) (D.arrayAs rankPrefix) (D.arrayAs sdocMin)
     final = (pretty "╭─") <> line <> (vsep deco) <> hang 1 (line <> pretty "╯")
 
@@ -224,10 +225,12 @@ sign (ArrayU a) = Right . pure . ArrayU . A.sign $ a
 
 -- | ¯
 --
+-- negate is just about a reserved word in haskell eg -2 is parsed as negate 2.
+--
 -- >>> run [i|¯ 1|]
 -- ¯1
-negate :: ArrayU -> Res
-negate (ArrayU a) = Right . pure . ArrayU . A.negate $ a
+negate' :: ArrayU -> Res
+negate' (ArrayU a) = Right . pure . ArrayU . A.negate' $ a
 
 -- | ⌵
 --
@@ -352,12 +355,28 @@ deduplicate :: ArrayU -> Res
 deduplicate (ArrayU a) = Right . pure . ArrayU . A.deduplicate $ a
 
 -- * dyadic operators
+
+-- | =
+--
+-- >>> run [i| =2 1|]
+-- 0
+-- >>> run [i| =2 [1 2 3]|]
+-- [0 1 0]
+-- >>> run [i| = [1 2 2] [1 2 3]|]
+-- [1 1 0]
 equals :: ArrayU -> ArrayU -> Res
 equals (ArrayU x) (ArrayU y) = fmap (pure . ArrayU . fmap fromIntegral) $ A.equals x y
 
+-- | ≠
+--
+-- >>> run [i| ≠2 1|]
+-- 1
+-- >>> run [i| ≠2 [1 2 3]|]
+-- [1 0 1]
+-- >>> run [i| ≠ [1 2 2] [1 2 3]|]
+-- [0 0 1]
 notequals :: ArrayU -> ArrayU -> Res
 notequals (ArrayU x) (ArrayU y) = fmap (pure . ArrayU . fmap fromIntegral) $ A.notequals x y
-
 
 -- | <
 --
@@ -396,7 +415,6 @@ greaterThan (ArrayU x) (ArrayU y) = fmap (pure . ArrayU . fmap fromIntegral) $ A
 -- 1
 greaterOrEqual :: ArrayU -> ArrayU -> Res
 greaterOrEqual (ArrayU x) (ArrayU y) = fmap (pure . ArrayU . fmap fromIntegral) $ A.greaterOrEqual x y
-
 
 -- | +
 --
@@ -494,44 +512,216 @@ atangent :: ArrayU -> ArrayU -> Res
 atangent (ArrayU x) (ArrayU y) = fmap (pure . ArrayU) $ A.atangent x y
 
 
+-- | ≍
+--
+-- >>> run [i|≍ 1_2_3 [1 2 3]|]
+-- 1
+-- >>> run [i|≍ 1_2_3 1_2|]
+-- 0
 match :: ArrayU -> ArrayU -> Res
 match (ArrayU x) (ArrayU y) = Right . pure . ArrayU . fmap fromIntegral $ A.match x y
 
+-- | ⊟
+--
+-- >>> run [i|⊟ 1 2|]
+-- [1 2]
+-- >>> run [i|⊟ [1 2 3] [4 5 6]|]
+-- ╭─
+-- ╷ 1 2 3
+--   4 5 6
+--         ╯
 couple :: ArrayU -> ArrayU -> Res
 couple (ArrayU x) (ArrayU y) = Right . pure . ArrayU $ A.couple x y
 
+-- | ⊂
+--
+-- >>> run [i|⊂ 1 2|]
+-- [1 2]
+-- >>> run [i|⊂ [1 2 3] [4 5 6]|]
+-- [1 2 3 4 5 6]
+-- >>> run [i|⊂ 1 [2 3]|]
+-- [1 2 3]
+-- >>> run [i|⊂ [1 2] 3|]
+-- [1 2 3]
+-- >>> run [i|⊂ [1_2 3_4] 5_6|]
+-- ╭─
+-- ╷ 1 2
+--   3 4
+--   5 6
+--       ╯
+-- >>> run [i|⊂ [1_2] [3_4 5_6]|]
+-- ╭─
+-- ╷ 1 2
+--   3 4
+--   5 6
+--       ╯
+-- >>> run [i|⊂ 0 [1_2 3_4]|]
+-- ╭─
+-- ╷ 0 0
+--   1 2
+--   3 4
+--       ╯
+-- >>> run [i|⊂ [1_2 3_4] 0|]
+-- ╭─
+-- ╷ 1 2
+--   3 4
+--   0 0
+--       ╯
 join :: ArrayU -> ArrayU -> Res
 join (ArrayU x) (ArrayU y) = fmap (pure . ArrayU) $ Bi.first (const SizeMismatch) (A.join x y)
 
+-- | ⊂
+--
+-- >>> run [i|⊏ 2 [8 3 9 2 0]|]
+-- 9
+-- >>> run [i|⊏ 4_2 [8 3 9 2 0]|]
+-- [0 9]
+-- >>> run [i|⊏ 0_2_1_1 [1_2_3 4_5_6 7_8_9]|]
+-- ╭─
+-- ╷ 1 2 3
+--   7 8 9
+--   4 5 6
+--   4 5 6
+--         ╯
+-- >>> run [i|⊏ [0_1 1_2 2_3] [2 3 5 7]|]
+-- ╭─
+-- ╷ 2 3
+--   3 5
+--   5 7
+--       ╯
 select :: ArrayU -> ArrayU -> Res
 select (ArrayU x) (ArrayU y) = Right . pure . ArrayU $ A.select (fmap asInt x) y
 
+-- | ⊡
+--
+-- >>> run [i|⊡ [1_2 0_1] [1_2_3 4_5_6]|]
+-- [6 2]
+-- >>> run [i|⊡ 2_1 [8 3 9 2 0]|]
+-- BadPick
+-- >>> run [i|⊡ 1 [1_2_3 4_5_6]|]
+-- [4 5 6]
 pick :: ArrayU -> ArrayU -> Res
-pick (ArrayU x) (ArrayU y) = Right . pure . ArrayU $ A.pick (fmap asInt x) y
+pick (ArrayU x) (ArrayU y) = fmap (pure . ArrayU) $ A.pick (fmap asInt x) y
 
+-- | ↯
+--
+-- >>> run [i|↯ 2_3 [1 2 3 4 5 6]|]
+-- ╭─
+-- ╷ 1 2 3
+--   4 5 6
+--         ╯
+-- >>> run [i|↯ 2_2 [1_2_3 4_5_6]|]
+-- ╭─
+-- ╷ 1 2
+--   3 4
+--       ╯
+-- >>> run [i|↯ [5] 2|]
+-- [2 2 2 2 2]
+-- >>> run [i|↯ 3_7 1_2_3_4|]
+-- ╭─
+-- ╷ 1 2 3 4 1 2 3
+--   4 1 2 3 4 1 2
+--   3 4 1 2 3 4 1
+--                 ╯
+-- >>> run [i|↯ 4 [1 2 3 4 5]|]
+-- ╭─
+-- ╷ 1 2 3 4 5
+--   1 2 3 4 5
+--   1 2 3 4 5
+--   1 2 3 4 5
+--             ╯
+-- >>> run [i|↯ 2 [1_2_3 4_5_6]|]
+-- ╭─
+-- ╷ 1 2 3
+-- ╷ 4 5 6
+-- ...
+--   1 2 3
+--   4 5 6
+--         ╯
 reshape :: ArrayU -> ArrayU -> Res
 reshape (ArrayU x) (ArrayU y) = Right . pure . ArrayU $ A.reshape (fmap asInt x) y
 
+-- | ☇
+--
+-- >>> run [i|☇ 1 ↯2_3_3⇡18|]
+-- ╭─
+-- ╷  0  1  2
+--    3  4  5
+--    6  7  8
+--    9 10 11
+--   12 13 14
+--   15 16 17
+--            ╯
+-- >>> run [i|△☇ 3 ↯2_3_3⇡18|]
+-- [1 2 3 3]
 rerank :: ArrayU -> ArrayU -> Res
 rerank (ArrayU x) (ArrayU y) = A.rerank (fmap asInt x) y & fmap (pure . ArrayU)
 
+-- | ↙
+--
+-- >>> run [i|↙ [3] [8 3 9 2 0]|]
+-- [8 3 9]
 take :: ArrayU -> ArrayU -> Res
-take (ArrayU x) (ArrayU y) = Right . pure . ArrayU $ A.take (fmap asInt x) y
+take (ArrayU x) (ArrayU y) = fmap (pure . ArrayU) $ A.take (fmap asInt x) y
 
+-- | ↘
+--
+-- >>> run [i|↘ 3 [8 3 9 2 0]|]
+-- [2 0]
 drop :: ArrayU -> ArrayU -> Res
-drop (ArrayU x) (ArrayU y) = Right . pure . ArrayU $ A.drop (fmap asInt x) y
+drop (ArrayU x) (ArrayU y) = fmap (pure . ArrayU) $ A.drop (fmap asInt x) y
 
+-- | ↻
+--
+-- >>> run [i|↻1 ⇡5|]
+-- [1 2 3 4 0]
 rotate :: ArrayU -> ArrayU -> Res
 rotate (ArrayU x) (ArrayU y) = Right . pure . ArrayU $ A.rotate (fmap asInt x) y
 
-windows :: ArrayU -> ArrayU -> Res
-windows (ArrayU x) (ArrayU y) = Right . pure . ArrayU $ A.windows (fmap asInt x) y
-
+-- | ▽
+--
+-- >>> run [i|▽ [3 2] [8 3 9 2 0]|]
+-- [8 8 8 3 3 9 9 9 2 2 0 0 0]
 keep :: ArrayU -> ArrayU -> Res
 keep (ArrayU x) (ArrayU y) = Right . pure . ArrayU $ (A.keep (fmap asInt x) y)
 
+-- | ◫
+--
+-- >>> run [i|◫2 ⇡4|]
+-- ╭─
+-- ╷ 0 1
+--   1 2
+--   2 3
+--       ╯
+windows :: ArrayU -> ArrayU -> Res
+windows (ArrayU x) (ArrayU y) = Right . pure . ArrayU $ A.windows (fmap asInt x) y
+
+-- | ⌕
+--
+-- >>> run [i|⌕ [5] [1 8 5 2 3 5 4 5 6 7]|]
+-- [0 0 1 0 0 1 0 1 0 0]
+-- >>> run [i|⌕ [1_2 2_0] ↯4_4⇡3|]
+-- ╭─
+-- ╷ 0 1 0 0
+--   1 0 0 0
+--   0 0 1 0
+--   0 0 0 0
+--           ╯
 find:: ArrayU -> ArrayU -> Res
 find (ArrayU x) (ArrayU y) = Right . pure . ArrayU . fmap fromIntegral $ A.find x y
+
+-- | ⦷
+--
+-- >>> run [i|⦷ [1_1 1_1] ↯ [5 5] 1|]
+-- ╭─
+-- ╷ 1 1 2 2 0
+--   1 1 2 2 0
+--   3 3 4 4 0
+--   3 3 4 4 0
+--   0 0 0 0 0
+--             ╯
+mask :: ArrayU -> ArrayU -> Res
+mask (ArrayU x) (ArrayU y) = Right . pure . ArrayU . fmap fromIntegral $ A.mask x y
 
 -- | /=
 --

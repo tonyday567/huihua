@@ -19,6 +19,8 @@ import Data.Text.Encoding (encodeUtf8)
 --
 -- yet to be implemented
 --
+-- infinite and negative axes in reshape
+--
 -- multi-line arrays
 --
 -- >>> run nyiMultiArray
@@ -30,6 +32,10 @@ import Data.Text.Encoding (encodeUtf8)
 -- ... format
 -- >>> run [i|÷ 3 1|]
 -- 0.3333333333333333
+--
+-- negate strand combination.
+-- >>> run [i|¯2_¯2|]
+-- ¯2
 --
 -- Implemented:
 --

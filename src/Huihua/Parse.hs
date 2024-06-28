@@ -267,7 +267,7 @@ glyphP =
             "⊝" -> pure Deduplicate
             "◰" -> pure Unique
             "□" -> pure Box
-            "≅" -> pure Match
+            "≍" -> pure Match
             "⊟" -> pure Couple
             "⊂" -> pure Join
             "⊏" -> pure Select
