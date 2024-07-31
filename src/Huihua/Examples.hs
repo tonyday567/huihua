@@ -8,6 +8,7 @@ import Data.Text.Encoding (encodeUtf8)
 
 -- $setup
 -- >>> :set -XOverloadedStrings
+-- >>> :set -XQuasiQuotes
 -- >>> import NumHask.Prelude
 -- >>> import Data.String.Interpolate
 -- >>> import Huihua.Examples

@@ -43,7 +43,7 @@ import Prettyprinter hiding (equals)
 #+begin_example
 Build profile: -w ghc-9.8.2 -O1
 In order, the following will be built (use -v for more details):
- - huihua-0.0.1 (lib) (file /Users/tonyday567/haskell/huihua/dist-newstyle/build/aarch64-osx/ghc-9.8.2/numhask-array-0.12/cache/build changed)
+ - huihua-0.0.1 (lib) (file src/Huihua/Array.hs changed)
 Preprocessing library for huihua-0.0.1..
 GHCi, version 9.8.2: https://www.haskell.org/ghc/  :? for help
 [1 of 8] Compiling Huihua.Examples  ( src/Huihua/Examples.hs, interpreted )
@@ -59,38 +59,272 @@ Ok, 8 modules loaded.
 #+end_example
 
 
-
-** scratchpad
 #+begin_src haskell-ng :results output
-:t all
+run [i|⊡ [1_2 0_1 0_0] [1_2_3 4_5_6 ]|]
+D.length $ A.first $ D.iota [2]
+D.rank $ (D.asArray [8,3,9,2,0] :: Array Int)
+A.pick (D.array [2,1] [2,1]) (D.asArray [8,3,9,2,0] :: Array Int)
+run [i|⊡ 2_1 [8 3 9 2 0]|]
 #+end_src
 
 #+RESULTS:
-: all :: Foldable t => (a -> Bool) -> t a -> Bool
+: [6 2 1]
+: 1
+: 1
+: Right (UnsafeArray [2] [9,3])
+: 9
+
+
+** range
+
+#+begin_src haskell-ng :results output
+A.range (D.toScalar 3)
+A.range (D.asArray [3])
+A.range (D.asArray [-2,3])
+A.range (D.toScalar (-3))
+#+end_src
+
+#+RESULTS:
+#+begin_example
+UnsafeArray [3] [0,1,2]
+UnsafeArray [3,1] [0,1,2]
+UnsafeArray [2,3,2] [-1,0,-1,1,-1,2,-2,0,-2,1,-2,2]
+UnsafeArray [3] [-1,-2,-3]
+[[[0,0],
+  [0,1],
+  [0,2]],
+ [[1,0],
+  [1,1],
+  [1,2]]]
+[[0],
+ [1],
+ [2]]
+#+end_example
+
+#+begin_src haskell-ng :results output
+A.range (D.toScalar 4)
+A.range (D.asArray [4])
+D.range (D.asArray [4])
+-- a = D.asArray [4]
+a = D.toScalar [4]
+D.join $ D.tabulateA (fmap abs a) (\s -> D.zipWithE (\ab si -> bool ab (negate one - ab) (si<0)) s (fmap signum a))
+#+end_src
+
+#+RESULTS:
+#+begin_example
+UnsafeArray [4] [0,1,2,3]
+UnsafeArray [4] [0,1,2,3]
+UnsafeArray [4,1] [0,1,2,3]
+<interactive>:80:32: error: [GHC-83865]
+    • Couldn't match type ‘[a0]’ with ‘Int’
+      Expected: Array Int
+        Actual: Array [a0]
+    • In the second argument of ‘fmap’, namely ‘a’
+      In the first argument of ‘D.tabulateA’, namely ‘(fmap abs a)’
+      In the second argument of ‘($)’, namely
+        ‘D.tabulateA
+           (fmap abs a)
+           (\ s
+              -> D.zipWithE
+                   (\ ab si -> bool ab (negate one - ab) (si < 0)) s (fmap signum a))’
+#+end_example
+
+** member
+
+#+begin_src haskell-ng :results output
+i = D.toScalar 2 :: Array Int
+a = D.array [2,2,3] [1,2,3,4,5,6,2,1,1,2,2,2] :: Array Int
+A.indexOf i a
+findI xs i' = fromMaybe (List.length xs) . List.findIndex (==i') . toList $ xs
+(\x -> findI x (D.fromScalar i)) <$> (D.extractsExcept [D.rank a - 1] a)
+#+end_src
+
+#+RESULTS:
+: UnsafeArray [2,2] [1,3,0,0]
+: UnsafeArray [2,2] [1,3,0,0]
+
+a 2 i 1
+
+#+begin_src haskell-ng :results output
+i = D.asArray [4,5,6] :: Array Int
+a = D.array [2,3] [1,2,3,4,5,6] :: Array Int
+A.indexOf i a
+fmap (findI (D.extractsExcept [D.rank a - 1] a)) (D.extractsExcept [D.rank i - 1] i)
+#+end_src
+
+#+RESULTS:
+: UnsafeArray [] [1]
+: UnsafeArray [] [1]
+
+a 1 i 1
+
+#+begin_src haskell-ng :results output
+i = D.array [3] [1,2,3] :: Array Int
+a = D.array [5] [0,3,4,5,1] :: Array Int
+A.indexOf i a
+fmap (findI a) i
+#+end_src
+
+#+RESULTS:
+: UnsafeArray [3] [4,5,1]
+: UnsafeArray [3] [4,5,1]
+
+a 1 i 2
+
+#+begin_src haskell-ng :results output
+i = D.array [2,3] [1..6] :: Array Int
+a = D.asArray [3,4,5] :: Array Int
+A.indexOf i a
+fmap (findI a) i
+#+end_src
+
+#+RESULTS:
+: UnsafeArray [2,3] [3,3,0,1,2,3]
+: UnsafeArray [2,3] [3,3,0,1,2,3]
+
+a 2 i 2
+#+begin_src haskell-ng :results output
+i = D.array [2,3] [1..6] :: Array Int
+a = D.array [1,3] [4,5,6] :: Array Int
+A.indexOf i a
+fmap (findI (D.extractsExcept [D.rank a - 1] a)) (D.extractsExcept [D.rank i - 1] i)
+#+end_src
+
+#+RESULTS:
+: UnsafeArray [2] [1,0]
+: UnsafeArray [2] [1,0]
+
+member
+
+#+begin_src haskell-ng :results output
+-- Shape.takeIndexes [] [0]
+-- D.join $ D.extracts [0] (D.toScalar 2)
+-- D.join $ D.extracts [0] (D.asSingleton $ D.toScalar 2)
+
+A.member (D.toScalar 2) (D.asArray [1,2,3])
+A.member (D.asArray [2]) (D.asArray [1,2,3])
+A.member (D.toScalar 5) (D.asArray [1,2,3])
+A.member (D.asArray [1,2,3]) (D.asArray [0,3,4,5,1])
+A.member (D.asArray [3,4,5]) (D.iota [2,3])
+A.member (D.iota [2,3]) (D.asArray [2,3,4])
+A.member (D.toScalar 2) (D.iota [2,3])
+#+end_src
+
+#+RESULTS:
+: UnsafeArray [] [1]
+: UnsafeArray [1] [1]
+: UnsafeArray [] [0]
+: UnsafeArray [3] [1,0,1]
+: UnsafeArray [1] [1]
+: UnsafeArray [2,3] [0,0,1,1,1,0]
+: UnsafeArray [2] [1,0]
+
+
+
+** parser debug pipeline
+
+#+begin_src haskell-ng :results output
+x = [i|⍏ 6_2_7_0_1_5|]
+runParser tokens x
+parseT x
+xis = parseT x & instructionize
+xis
+interpI xis
+run x
+#+end_src
+
+#+RESULTS:
+: OK [GlyphToken Rise,DoubleToken 6.0,GlyphToken Strand,DoubleToken 2.0,GlyphToken Strand,DoubleToken 7.0,GlyphToken Strand,DoubleToken 0.0,GlyphToken Strand,DoubleToken 1.0,GlyphToken Strand,DoubleToken 5.0] ""
+: [GlyphToken Rise,DoubleToken 6.0,GlyphToken Strand,DoubleToken 2.0,GlyphToken Strand,DoubleToken 7.0,GlyphToken Strand,DoubleToken 0.0,GlyphToken Strand,DoubleToken 1.0,GlyphToken Strand,DoubleToken 5.0]
+: [IOp Rise,IArray (UnsafeArray [6] [6.0,2.0,7.0,0.0,1.0,5.0])]
+: Right (Stack {stackList = [ArrayU {arrayd = UnsafeArray [6] [3.0,4.0,1.0,5.0,0.0,2.0]}]})
+: [3 4 1 5 0 2]
+
+#+begin_src haskell-ng :results output
+i = parseT x
+instructionize $ List.take 1 i
+#+end_src
+
+#+RESULTS:
+: []
+
+#+begin_src haskell-ng :results output
+D.folds [0] sum (D.iota 5)
+#+end_src
+
+#+RESULTS:
+: UnsafeArray [5] [0,1,2,3,4]
+
+#+begin_src haskell-ng :results output
+List.drop 2 xis
+either viaShow pretty $ interpI $ List.drop 2 xis
+a = (D.asArray [1,5,8,2] :: Array Double)
+run [i|+0_1_0 0_4_3|]
+run [i|+[0_1_0 0_4_3] [1_1_1 1_1_1]|]
+#+end_src
+
+#+RESULTS:
+: [IOp Flip,IReduceOp Add,IOp Duplicate,IArray (UnsafeArray [4] [1.0,5.0,8.0,2.0])]
+: [1 5 8 2]
+: [1 5 8 2]
+: [0 5 3]
+: ╭─
+: ╷ 1 5 4
+:   1 2 1
+:         ╯
+
+#+begin_src haskell-ng :results output
+runParser tokens "◌1 2"
+runParser tokens [i|◌1 2|]
+runParser tokens (encodeUtf8 [i|◌1 2|])
+#+end_src
+
+#+RESULTS:
+: OK [] "\204\&1 2"
+: OK [GlyphToken Pop,IntToken 1,IntToken 2] ""
+: OK [GlyphToken Pop,IntToken 1,IntToken 2] ""
+
+
+* development notes
+** pad
+
+#+begin_src haskell-ng :results output
+a = D.iota [2] :: Array Int
+s' = [3,3] :: [Int]
+pretty $ D.pad 69 s' a
+pretty $ D.lpad 69 s' a
+#+end_src
+
+#+RESULTS:
+: [[0,1,69],
+:  [69,69,69],
+:  [69,69,69]]
+: [[69,69,69],
+:  [69,69,69],
+:  [69,0,1]]
 
 ** find & mask
 
 findNoOverlap deconstruction
 
 #+begin_src haskell-ng :results output
-a = D.cycle [7,7] (D.iota [3]) :: Array Int
-i = D.array [2,2] [1,2,2,0] :: Array Int
+a = D.konst [4,4] 1 :: Array Int
+i = D.konst [2,2] 1 :: Array Int
 pretty $ fmap sig $ D.findNoOverlap i a
 #+end_src
 
 #+RESULTS:
-: [[0,1,0,0,1,0],
-:  [0,0,0,0,0,0],
-:  [0,0,1,0,0,1],
-:  [0,0,0,0,0,0],
-:  [1,0,0,1,0,0],
-:  [0,0,0,0,0,1]]
+: [[1,0,1],
+:  [0,0,0],
+:  [1,0,1]]
 
 #+begin_src haskell-ng :results output
-a = D.cycle [7,7] (D.iota [3]) :: Array Int
-i = D.array [2,2] [1,2,2,0] :: Array Int
-    iexp = D.rerank (D.rank a) i
-    f = D.find iexp a
+    iexp = rerank (rank a) i
+    f = find iexp a
+    cl sh = List.filter (\xs -> P.not (any (>0) (List.init xs))) $ List.filter (P.not . (all (>=0))) $ D.arrayAs $ D.tabulate ((\x -> 2 * x - 1) <$> sh) (\s -> List.zipWith (\x x0 -> x - x0 + 1) s sh)
+    go r' s = D.index f s && all P.not (D.index r' <$> (List.filter (S.inside x (D.shape f)) $ fmap (List.zipWith (+) s) (cl (shape iexp))))
+    r = tabulate (shape f) (go r)
+
     cl sh = List.filter (\xs -> P.not (any (>0) (List.init xs))) $ List.filter (P.not . (all (>=0))) $ D.arrayAs $ D.tabulate ((\x -> 2 * x - 1) <$> sh) (\s -> List.zipWith (\x x0 -> x - x0 + 1) s sh)
     inside x' x = all id $ List.zipWith (\y' y -> y >= 0 && y < y') x' x
     go r' s = D.index f s && all P.not (D.index r' <$> (List.filter (inside (D.shape f)) $ fmap (List.zipWith (+) s) (cl (D.shape iexp))))
@@ -98,6 +332,71 @@ i = D.array [2,2] [1,2,2,0] :: Array Int
     pretty $ fmap sig $ D.find i a
     pretty $ fmap sig r
     #+end_src
+
+    #+RESULTS:
+    #+begin_example
+    <interactive>:95:12: error: [GHC-87543]
+        Ambiguous occurrence ‘rerank’.
+        It could refer to
+           either ‘Huihua.Array.rerank’, defined at src/Huihua/Array.hs:351:1,
+               or ‘U.rerank’,
+                  imported from ‘Huihua.ArrayU’
+                  (and originally defined at src/Huihua/ArrayU.hs:676:1-6).
+    <interactive>:96:9: error: [GHC-87543]
+        Ambiguous occurrence ‘find’.
+        It could refer to
+           either ‘NumHask.Prelude.find’,
+                  imported from ‘NumHask.Prelude’
+                  (and originally defined in ‘Data.Foldable’),
+               or ‘Huihua.Array.find’, defined at src/Huihua/Array.hs:383:1,
+               or ‘U.find’,
+                  imported from ‘Huihua.ArrayU’
+                  (and originally defined at src/Huihua/ArrayU.hs:729:1-4).
+    <interactive>:97:104: error: [GHC-88464]
+        Variable not in scope: arrayAs :: a0 -> [[a]]
+        Suggested fix:
+          Perhaps use one of these:
+            ‘D.arrayAs’ (imported from NumHask.Array.Dynamic),
+            ‘D.array’ (imported from NumHask.Array.Dynamic),
+            record field of ArrayU ‘arrayd’ (imported from Huihua.ArrayU)
+
+    <interactive>:97:114: error: [GHC-88464]
+        Variable not in scope: tabulate :: [c] -> ([c] -> [c]) -> a0
+        Suggested fix:
+          Perhaps use one of these:
+            ‘D.tabulate’ (imported from NumHask.Array.Dynamic),
+            ‘D.tabulateA’ (imported from NumHask.Array.Dynamic)
+    <interactive>:98:66: error: [GHC-76037] Not in scope: ‘S.inside’
+
+    <interactive>:98:76: error: [GHC-87543]
+        Ambiguous occurrence ‘shape’.
+        It could refer to
+           either ‘Huihua.Array.shape’, defined at src/Huihua/Array.hs:233:1,
+               or ‘U.shape’,
+                  imported from ‘Huihua.ArrayU’
+                  (and originally defined at src/Huihua/ArrayU.hs:295:1-5).
+
+    <interactive>:98:119: error: [GHC-87543]
+        Ambiguous occurrence ‘shape’.
+        It could refer to
+           either ‘Huihua.Array.shape’, defined at src/Huihua/Array.hs:233:1,
+               or ‘U.shape’,
+                  imported from ‘Huihua.ArrayU’
+                  (and originally defined at src/Huihua/ArrayU.hs:295:1-5).
+    <interactive>:99:19: error: [GHC-87543]
+        Ambiguous occurrence ‘shape’.
+        It could refer to
+           either ‘Huihua.Array.shape’, defined at src/Huihua/Array.hs:233:1,
+               or ‘U.shape’,
+                  imported from ‘Huihua.ArrayU’
+                  (and originally defined at src/Huihua/ArrayU.hs:295:1-5).
+    [[1,1,1],
+     [1,1,1],
+     [1,1,1]]
+    [[1,0,1],
+     [0,0,0],
+     [1,0,1]]
+    #+end_example
 
 *** tests
 
@@ -194,20 +493,20 @@ pretty $ A.mask i a
 #+RESULTS:
 #+begin_example
 UnsafeArray [4,4] [True,True,True,True,True,True,True,True,True,True,True,True,True,True,True,True]
-[[True,False,True,False],
- [False,False,False,False],
- [True,False,True,False],
- [False,False,False,False]]
+[[True,True,True,True],
+ [True,True,True,True],
+ [True,True,True,True],
+ [True,True,True,True]]
 [[1,1,1,1,0],
  [1,1,1,1,0],
  [1,1,1,1,0],
  [1,1,1,1,0],
  [0,0,0,0,0]]
-[[1,1,2,2,0],
- [1,1,2,2,0],
- [3,3,4,4,0],
- [3,3,4,4,0],
- [0,0,0,0,0]]
+[[1,3,5,7,4],
+ [6,14,18,22,12],
+ [14,30,34,38,20],
+ [22,46,50,54,28],
+ [13,27,29,31,16]]
 #+end_example
 
 
@@ -224,16 +523,16 @@ pretty $ A.mask i a
 #+begin_example
 UnsafeArray [3,3] [False,True,False,True,False,False,False,False,True]
 [[False,True,False],
- [False,False,False],
+ [True,False,False],
  [False,False,True]]
 [[0,1,0,0],
  [1,0,0,0],
  [0,0,1,0],
  [0,0,0,0]]
 [[0,1,1,0],
- [0,1,1,0],
- [0,0,2,2],
- [0,0,2,2]]
+ [2,3,1,0],
+ [2,2,3,3],
+ [0,0,3,3]]
 #+end_example
 
 #+begin_src haskell-ng :results output
@@ -253,12 +552,15 @@ run [i|⦷ [1_2 2_0] ↯4_4⇡3|]
 #+end_src
 
 #+RESULTS:
-: ╭─
-: ╷ 0 1 1 0
-:   0 1 1 0
-:   0 0 2 2
-:   0 0 2 2
-:           ╯
+: <interactive>:77:8: error: [GHC-83865]
+:     • Couldn't match expected type ‘template-haskell-2.21.0.0:Language.Haskell.TH.Quote.QuasiQuoter’
+:                   with actual type ‘Array Int’
+:     • In the first argument of ‘template-haskell-2.21.0.0:Language.Haskell.TH.Quote.quoteExp’, namely
+:         ‘i’
+:       In the expression:
+:         template-haskell-2.21.0.0:Language.Haskell.TH.Quote.quoteExp
+:           i "\10679 [1_2 2_0] \8623\&4_4\8673\&3"
+:       In the quasi-quotation: [i|⦷ [1_2 2_0] ↯4_4⇡3|]
 
 ** find
 
@@ -409,7 +711,6 @@ run [i|
 
 #+end_src
 
-
 ** keep
 
 #+begin_src haskell-ng :results output
@@ -431,81 +732,6 @@ D.join $ D.asArray $ fold $ D.zipWithE replicate (D.cycle (List.take 1 $ D.shape
 
 #+RESULTS:
 : UnsafeArray [8,4] [0,1,2,3,0,1,2,3,0,1,2,3,4,5,6,7,4,5,6,7,8,9,10,11,8,9,10,11,8,9,10,11]
-
-** parser debug pipeline
-
-#+begin_src haskell-ng :results output
-x = [i|↙¯2_¯2 ↯3_4⇡12|]
-runParser tokens x
-parseT x
-xis = parseT x & instructionize
-interpI xis
-run x
-#+end_src
-
-#+RESULTS:
-: OK [GlyphToken Take,GlyphToken Negate,DoubleToken 2.0,GlyphToken Strand,GlyphToken Negate,DoubleToken 2.0,GlyphToken Reshape,DoubleToken 3.0,GlyphToken Strand,DoubleToken 4.0,GlyphToken Range,DoubleToken 12.0] ""
-: [GlyphToken Take,GlyphToken Negate,DoubleToken 2.0,GlyphToken Strand,GlyphToken Negate,DoubleToken 2.0,GlyphToken Reshape,DoubleToken 3.0,GlyphToken Strand,DoubleToken 4.0,GlyphToken Range,DoubleToken 12.0]
-: Left EmptyStack2
-: EmptyStack2
-
-#+begin_src haskell-ng :results output
-D.folds [] (foldl' (+) zero) (D.array [4] [5, 1, 8, 2] :: Array Double)
-D.folds [1] (foldl' (+) zero) (D.array [2,2] [5, 1, 8, 2] :: Array Double)
-x3 = D.array [2,2,3] [0,1,0,0,4,3,1,1,1,1,1,1]
-D.folds [1,2] (foldl' (+) zero) x3
-pretty (ArrayU x3)
-#+end_src
-
-#+RESULTS:
-#+begin_example
-UnsafeArray [] [16.0]
-UnsafeArray [2] [13.0,3.0]
-UnsafeArray [2,3] [1,2,1,1,5,4]
-╭─
-╷ 0 1 0
-╷ 0 4 3
-
-  1 1 1
-  1 1 1
-        ╯
-#+end_example
-
-#+begin_src haskell-ng :results output
-D.folds [0] sum (D.iota 5)
-#+end_src
-
-#+RESULTS:
-: UnsafeArray [5] [0,1,2,3,4]
-
-#+begin_src haskell-ng :results output
-List.drop 2 xis
-either viaShow pretty $ interpI $ List.drop 2 xis
-a = (D.asArray [1,5,8,2] :: Array Double)
-run [i|+0_1_0 0_4_3|]
-run [i|+[0_1_0 0_4_3] [1_1_1 1_1_1]|]
-#+end_src
-
-#+RESULTS:
-: [IOp Flip,IReduceOp Add,IOp Duplicate,IArray (UnsafeArray [4] [1.0,5.0,8.0,2.0])]
-: [1 5 8 2]
-: [1 5 8 2]
-: [0 5 3]
-: ╭─
-: ╷ 1 5 4
-:   1 2 1
-:         ╯
-
-#+begin_src haskell-ng :results output
-runParser tokens "◌1 2"
-runParser tokens [i|◌1 2|]
-runParser tokens (encodeUtf8 [i|◌1 2|])
-#+end_src
-
-#+RESULTS:
-: OK [] "\204\&1 2"
-: OK [GlyphToken Pop,IntToken 1,IntToken 2] ""
-: OK [GlyphToken Pop,IntToken 1,IntToken 2] ""
 
 ** ArrayH pretty
 
@@ -794,7 +1020,6 @@ Failed, three modules loaded.
     Data constructor not in scope: Prelude :: b0 -> c
 #+end_example
 
-
 * combo array parsing
 
 #+begin_src haskell-ng :results output
@@ -851,7 +1076,6 @@ assemble (aArrayLeft *> many aToken) [GlyphToken ArrayLeft,GlyphToken ArrayRight
  #+RESULTS:
  : ts :: [Huihua.Parse.Token]
  : Just ([GlyphToken ArrayRight],[])
-
 
 * number parsing
 

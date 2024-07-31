@@ -47,6 +47,7 @@ module Huihua.ArrayU
     where',
     classify,
     deduplicate,
+    unique,
 
     -- * dyadics
     equals,
@@ -80,6 +81,8 @@ module Huihua.ArrayU
     keep,
     find,
     mask,
+    member,
+    indexOf,
 
     -- * reductions
     equalsR,
@@ -107,7 +110,6 @@ import NumHask.Prelude hiding (not, sqrt, sin, floor, ceiling, round, minimum, m
 import NumHask.Prelude qualified as P
 import Huihua.Warning
 import Prettyprinter hiding (equals)
-import Data.Bifunctor qualified as Bi
 import Data.List qualified as List
 import Data.Tree qualified as Tree
 import Data.Either
@@ -141,7 +143,7 @@ instance Pretty ArrayU where
     where
     t = ptree (fmap showU x)
     maxp = D.reduces [0] (P.maximum . fmap Text.length) (D.join $ D.asArray $ rights t)
-    s = fmap (fmap ((D.zipWithE (\m a -> lpad ' ' m a) maxp))) t
+    s = fmap (fmap ((D.zipWithE (\m a -> lpad' ' ' m a) maxp))) t
     sdoc = mconcat $ fmap (either (\n -> replicate (n-1) mempty) (pure . hsep . fmap pretty . D.arrayAs)) s
     sdocMin = D.concatenate 0 (D.konst [max 0 (D.rank x - P.length sdoc - 1)] mempty) (D.asArray sdoc)
     rankPrefix = fmap pretty (D.pad " " [D.length sdocMin] (D.konst [D.rank x - 1] "╷"))
@@ -151,8 +153,8 @@ instance Pretty ArrayU where
 showU :: Double -> Text
 showU x = bool mempty (pack "¯") (x < zero) <> bool (pack $ show (abs x)) (pack $ show (asInt (abs x))) (isInt x)
 
-lpad :: Char -> Int -> Text -> Text
-lpad c maxl x = (pack $ replicate (maxl - P.length (unpack x)) c) <> x
+lpad' :: Char -> Int -> Text -> Text
+lpad' c maxl x = (pack $ replicate (maxl - P.length (unpack x)) c) <> x
 
 unfoldF :: Either Int (Array a) -> (Maybe (Either Int (Array a)), [Either Int (Array a)])
 unfoldF (Left n) = (Just (Left n), [])
@@ -214,7 +216,6 @@ identity x = Right [x]
 -- [1 0 ¯1 ¯2]
 not :: ArrayU -> Res
 not (ArrayU a) = Right . pure . ArrayU . A.not $ a
-
 
 -- | ±
 --
@@ -324,35 +325,125 @@ range (ArrayU a) = Right . pure . ArrayU . fmap fromIntegral . A.range $ fmap as
 first :: ArrayU -> Res
 first (ArrayU a) = Right . pure . ArrayU . A.first $ a
 
+-- | ⇌
+--
+-- >>> run [i|⇌[1_2 3_4 5_6]|]
+-- ╭─
+-- ╷ 5 6
+--   3 4
+--   1 2
+--       ╯
 reverse :: ArrayU -> Res
 reverse (ArrayU a) = Right . pure . ArrayU . A.reverse $ a
 
+-- | ♭
+--
+-- >>> run [i|♭[1_2 3_4 5_6]|]
+-- [1 2 3 4 5 6]
 deshape :: ArrayU -> Res
 deshape (ArrayU a) = Right . pure . ArrayU . A.deshape $ a
 
+-- | ¤
+--
+-- >>> run [i|¤1_2]|]
+-- ╭─
+-- ╷ 1 2
+--       ╯
 fix :: ArrayU -> Res
 fix (ArrayU a) = Right . pure . ArrayU . A.fix $ a
 
+-- | ⋯
+--
+-- >>> run [i|⋯[1_2 3_4 5_6]|]
+-- ╭─
+-- ╷ 1 0 0
+-- ╷ 0 1 0
+-- ...
+--   1 1 0
+--   0 0 1
+-- ...
+--   1 0 1
+--   0 1 1
+--         ╯
 bits :: ArrayU -> Res
 bits (ArrayU a) = Right . pure . ArrayU . fmap fromIntegral . A.bits . fmap asInt $ a
 
+
+-- | ⍉
+--
+-- >>> run [i|⍉[[1_2 3_4] [5_6 7_8]]|]
+-- ╭─
+-- ╷ 1 5
+-- ╷ 2 6
+-- ...
+--   3 7
+--   4 8
+--       ╯
 transpose :: ArrayU -> Res
 transpose (ArrayU a) = Right . pure . ArrayU . A.transpose $ a
 
+-- | ⍏
+--
+-- >>> run [i|⍏ 6_2_7_0_1_5|]
+-- [3 4 1 5 0 2]
 rise :: ArrayU -> Res
 rise (ArrayU a) = Right . pure . ArrayU . fmap fromIntegral . A.rise $ a
 
+-- | ⍖
+--
+-- >>> run [i|⍖ 6_2_7_0_1_5|]
+-- [2 0 5 1 4 3]
 fall :: ArrayU -> Res
 fall (ArrayU a) = Right . pure . ArrayU . fmap fromIntegral . A.fall $ a
 
+
+-- | ⊚
+--
+-- >>> run [i|⊚[1_0_0 0_1_1 0_2_0]|]
+-- ╭─
+-- ╷ 0 0
+--   1 1
+--   1 2
+--   2 1
+--   2 1
+--       ╯
 where' :: ArrayU -> Res
 where' (ArrayU a) = Right . pure . ArrayU . fmap fromIntegral . A.where' . fmap asInt $ a
 
+-- | ⊛
+--
+-- >>> run [i|⊛7_7_8_0_1_2_0|]
+-- [0 0 1 2 3 4 2]
 classify :: ArrayU -> Res
 classify (ArrayU a) = Right . pure . ArrayU . fmap fromIntegral . A.classify $ a
 
+-- | ◴
+--
+-- >>> run [i|◴ 7_7_8_0_1_2_0|]
+-- [7 8 0 1 2]
 deduplicate :: ArrayU -> Res
 deduplicate (ArrayU a) = Right . pure . ArrayU . A.deduplicate $ a
+
+-- | ◰
+--
+-- >>> run [i|◰ [3_2 1_4 3_2 5_6 1_4 7_8]|]
+-- [1 1 0 1 0 1]
+unique :: ArrayU -> Res
+unique (ArrayU a) = Right . pure . ArrayU . fmap fromIntegral . A.unique $ a
+
+-- | ∊
+--
+-- >>> run [i|∊ [1 2 3] [0 3 4 5 1]|]
+-- [1 0 1]
+member :: ArrayU -> ArrayU -> Res
+member (ArrayU x) (ArrayU y) = Right . pure . ArrayU . fmap fromIntegral $ A.member x y
+
+-- | ⊗
+--
+-- >>> run [i|⊗ 2 [1 2 3]|]
+-- 1
+indexOf :: ArrayU -> ArrayU -> Res
+indexOf (ArrayU x) (ArrayU y) = Right . pure . ArrayU . fmap fromIntegral $ A.indexOf x y
 
 -- * dyadic operators
 
@@ -568,7 +659,7 @@ couple (ArrayU x) (ArrayU y) = Right . pure . ArrayU $ A.couple x y
 --   0 0
 --       ╯
 join :: ArrayU -> ArrayU -> Res
-join (ArrayU x) (ArrayU y) = fmap (pure . ArrayU) $ Bi.first (const SizeMismatch) (A.join x y)
+join (ArrayU x) (ArrayU y) = fmap (pure . ArrayU) (A.join x y)
 
 -- | ⊂
 --
@@ -597,7 +688,7 @@ select (ArrayU x) (ArrayU y) = Right . pure . ArrayU $ A.select (fmap asInt x) y
 -- >>> run [i|⊡ [1_2 0_1] [1_2_3 4_5_6]|]
 -- [6 2]
 -- >>> run [i|⊡ 2_1 [8 3 9 2 0]|]
--- BadPick
+-- 9
 -- >>> run [i|⊡ 1 [1_2_3 4_5_6]|]
 -- [4 5 6]
 pick :: ArrayU -> ArrayU -> Res

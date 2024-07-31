@@ -48,14 +48,21 @@ module Huihua.Array
     reverse,
     deshape,
     fix,
+    bits',
     bits,
     transpose,
     rise,
     fall,
     where',
+    classifyScan,
     classify,
+    deduplicateScan,
     deduplicate,
-    couple,
+    uniqueScan,
+    unique,
+    member,
+    indexOf,
+    D.couple,
     match,
     pick,
     rotate,
@@ -69,7 +76,6 @@ module Huihua.Array
     keep,
     find,
     mask,
-    maskFind,
 
     equalsR,
     notEqualsR,
@@ -86,11 +92,13 @@ module Huihua.Array
     modulusR,
     powerR,
     logarithmR,
+    (¬),
   )
 where
 
 import NumHask.Array.Dynamic (Array(..))
 import NumHask.Array.Dynamic qualified as D
+import NumHask.Array.Shape qualified as Shape
 import Data.Vector qualified as V
 import NumHask.Prelude hiding (not, sqrt, sin, floor, ceiling, round, minimum, maximum, length, reverse, fix, take, drop, find, diff)
 import NumHask.Prelude qualified as P
@@ -128,7 +136,7 @@ reduceU f a0 a = D.reduces [0] (foldl' (flip f) a0) a
 reduce1U :: (a -> a -> a) -> Array a -> Either HuihuaWarning (Array a)
 reduce1U f a
   | null a = Left NoIdentity
-  | D.length a == 1 = Right (D.selects [(0,0)] a)
+  | D.length a == 1 = Right (D.select 0 0 a)
   | otherwise =
       let (x D.:| xs) = a in
       Right (D.zipWithE (foldl' (flip f)) x (D.extractsExcept [0] xs))
@@ -136,6 +144,9 @@ reduce1U f a
 -- * uiua api
 not :: (Ring a) => Array a -> Array a
 not = fmap (one-)
+
+(¬) :: (Ring a) => Array a -> Array a
+(¬) = not
 
 sign :: (Base a~a, Basis a) => Array a -> Array a
 sign = fmap signum
@@ -197,7 +208,9 @@ greaterOrEqual = dyadicPervasiveBool (>=)
 modulus :: Array Double -> Array Double -> Either HuihuaWarning (Array Double)
 modulus = dyadicPervasive modD
 
--- >>> modD 7 5
+-- | `mod` for doubles.
+-- >>> modD 7.5 5
+-- 2.5
 modD :: Double -> Double -> Double
 modD n d
   | d == infinity = n
@@ -222,101 +235,131 @@ atangent = dyadicPervasive (flip atan2)
 length :: Array a -> Array Int
 length = D.toScalar . D.length
 
--- |
---
--- TODO: negative numbers
 range :: Array Int -> Array Int
-range = D.range
+range a
+  | D.rank a == 0 = bool (D.range [D.fromScalar a]) (fmap (negate one -) $ D.range [abs $ D.fromScalar a]) (D.fromScalar a < zero)
+  | otherwise = D.join $ D.tabulate (D.arrayAs a') (\s -> D.asArray $ D.zipWithE (\ab si -> bool ab (negate one - ab) (si<0)) (D.asArray s) s' )
+  where
+    a' = fmap abs a
+    s' = fmap signum a
 
 shape :: Array a -> Array Int
-shape = D.shape
+shape = D.asArray . D.shape
 
 first :: Array a -> Array a
-first = D.row 0
+first = D.select 0 0
 
 reverse :: Array a -> Array a
 reverse a = D.reverses [0] a
 
--- FIXME: technical, should deshape have to be specified along dimensions?
 deshape :: Array a -> Array a
-deshape a = D.reshape [V.product (D.shape a)] a
+deshape a = D.reshape [product (D.shape a)] a
 
--- | Add another axis to an array (at the end)
 fix :: Array a -> Array a
-fix (UnsafeArray i v) = D.array (i <> V.singleton 1) v
+fix a = D.elongate 0 a
 
 bits' :: Int -> Array Int
-bits' x =
-  [0..] & P.take (finiteBitSize x - countLeadingZeros x) & fmap (\b -> x .&. bit b) &  D.asVector & D.vectorAs
+bits' x = bool id (fmap negate) (x < 0) $
+  [0..] & P.take (finiteBitSize x' - countLeadingZeros x') & fmap (sig . testBit x') & D.asArray
+  where
+    x' = abs x
 
 bits :: Array Int -> Array Int
-bits = fmap bits' >>> D.joins [0]
-
-transpose :: Array a -> Array a
-transpose = D.transpose
-
-keep :: Array Int -> Array a -> Array a
-keep i a = D.join $ D.asArray $ fold $ D.zipWithE replicate (D.cycle (List.take 1 $ D.shape a) i) (D.extracts [0] a)
-
--- >>> where' (fromList1 [1,2,3])
--- Right [0, 1, 1, 2, 2, 2]
-where' :: Array Int -> Array Int
-where' a = keep (D.range (length a)) a
-
-classify :: (Ord a) => Array a -> Array Int
-classify a = D.asArray $ fst <$> mscan (toList $ D.extracts [0] a)
+bits a = D.join bs'
   where
-    mscan [] = []
-    mscan (x:xs) =
+    bs = fmap bits' a
+    m = P.maximum (fmap D.length bs)
+    bs' = fmap (D.pad 0 [m]) bs
+
+-- | Rotate the axes by 1
+transpose :: Array a -> Array a
+transpose a = D.reorder (Shape.rotate 1 [0..D.rank a-1]) a
+
+rise :: (Ord a) => Array a -> Array Int
+rise a = D.orders [0] $ D.extracts [0] a
+
+fall :: (Ord a) => Array a -> Array Int
+fall a = D.ordersBy [0] (fmap Down) $ D.extracts [0] a
+
+where' :: Array Int -> Array Int
+where' a = D.join $ D.asArray $ fmap D.asArray $ fold $ D.zipWithE replicate a (D.indices (D.shape a))
+
+classifyScan :: (Ord a) => [a] -> [Int]
+classifyScan [] = []
+classifyScan (x:xs) = (\(f,_,_) -> f) <$>
       scanl
-      (\(s, m) k ->
-         maybe (1+s, Map.insert k (1+s) m) (,m)
-         (Map.lookup a m)) (0,Map.singleton x (0::Int))
+      (\(s, c, m) k ->
+         maybe (c, c+1, Map.insert k (1+s) m) (,c,m)
+         (Map.lookup k m)) (0,1,Map.singleton x (0::Int))
       xs
 
--- >>> deduplicate (fromList1 [2,3,3,3,1,1::Int])
--- [2, 3, 1]
-deduplicate :: (Ord a) => Array a -> Array a
-deduplicate a = D.joins [0] $ D.asArray $ mapMaybe fst (dscan (toList $ D.extracts [0] a))
-  where
-    dscan [] = []
-    dscan (x0:xs) =
+classify :: (Ord a) => Array a -> Array Int
+classify a = (D.asArray . classifyScan . D.arrayAs) $ D.extracts [0] a
+
+deduplicateScan :: Ord a => [a] -> [(Maybe a, Set.Set a)]
+deduplicateScan [] = []
+deduplicateScan (x0:xs) =
       scanl
       (\(_, set) k ->
          bool (Just k, Set.insert k set) (Nothing, set)
          (Set.member k set)) (Just x0,Set.singleton x0)
       xs
 
+deduplicate :: (Ord a) => Array a -> Array a
+deduplicate a = D.joins [0] $ (D.asArray . mapMaybe fst . deduplicateScan . D.arrayAs) $ D.extracts [0] $ a
+
+uniqueScan :: (Ord a) => [a] -> [(Int, Set.Set a)]
+uniqueScan [] = []
+uniqueScan (x0:xs) =
+      scanl
+      (\(_, set) k ->
+         bool (1, Set.insert k set) (0, set)
+         (Set.member k set)) (1,Set.singleton x0)
+      xs
+
+unique :: (Ord a) => Array a -> Array Int
+unique a = (D.asArray . fmap fst . uniqueScan . D.arrayAs) (D.extracts [0] a)
+
+member :: (Ord a) => Array a -> Array a -> Array Int
+member i a
+  | D.isScalar i = fmap (sig . Set.member (D.fromScalar i) . Set.fromList . toList) (D.extractsExcept [D.rank a - 1] a)
+  | otherwise = D.asArray (fmap sig ks)
+  where
+    spliti
+      | D.rank i == 0 = D.singleton i
+      | D.rank a - D.rank i == 1 = D.singleton i
+      | otherwise = D.extracts (List.take (D.rank i - D.rank a + 1) [0..]) i
+    aset = Set.fromList (toList (D.extracts [0] a))
+    ks = (\x -> Set.member x aset) <$> spliti
+
+indexOf :: Eq a => Array a -> Array a -> Array Int
+indexOf i a
+  | D.isScalar i = fmap (\x -> findI x (D.fromScalar i)) (D.extractsExcept [D.rank a - 1] a)
+  | D.rank a == 1 = fmap (findI a) i
+  | otherwise = fmap (findI (D.extractsExcept [D.rank a - 1] a)) (D.extractsExcept [D.rank i - 1] i)
+  where
+    findI xs i' = fromMaybe (List.length xs) . List.findIndex (==i') . toList $ xs
+
 match :: (Eq a) => Array a -> Array a -> Array Int
 match a a' = D.toScalar (bool 0 1 (a==a'))
 
--- | ⊟ 1 2
--- >>> pretty $ couple (D.asArray [1,2,3]) (D.asArray [4,5,6::Int])
--- [[1,2,3],
---  [4,5,6]]
-couple :: Array a -> Array a -> Array a
-couple a a' =
-  D.concatenate 0 (D.reshape (1:D.shape a) a) (D.reshape (1:D.shape a') a')
-
--- | ⊡
---
 pick :: Array Int -> Array a -> Either HuihuaWarning (Array a)
 pick i a
-  | D.length i > D.rank a = Left BadPick
-  | otherwise = Right $ D.join $ fmap (\s -> D.selects (List.zip [0..] (D.arrayAs s)) a) (D.extracts [0..(D.rank i) - 2] i)
+  | D.length (first i) > D.rank a = Left BadPick
+  | otherwise = Right $ D.join $ fmap (\s -> D.rowWise D.selects (D.arrayAs s) a) (D.extracts [0..(D.rank i) - 2] i)
 
 rotate :: Array Int -> Array a -> Array a
-rotate r a = D.rotates (P.zip [0..] (D.arrayAs r)) a
+rotate r a = D.rowWise (D.dimsWise D.rotate) (D.arrayAs r) a
 
 -- | https://www.uiua.org/docs/join
-join :: Array a -> Array a -> Either String (Array a)
+join :: Array a -> Array a -> Either HuihuaWarning (Array a)
 join a a'
   | P.drop 1 (D.shape a) == P.drop 1 (D.shape a') = Right $ D.concatenate 0 a a'
   | D.shape a == P.drop 1 (D.shape a') = Right $ D.prepend 0 a a'
   | P.drop 1 (D.shape a) == D.shape a' = Right $ D.append 0 a a'
   | (D.shape a) `List.isSuffixOf` (D.shape a') = Right $ D.prepend 0 (D.repeat (List.drop 1 $ D.shape a') a) a'
   | (D.shape a') `List.isSuffixOf` (D.shape a) = Right $ D.append 0 a (D.repeat (List.drop 1 $ D.shape a) a')
-  | otherwise =  Left "Shape Mismatch"
+  | otherwise =  Left SizeMismatch
 
 -- | Select multiple rows from an array
 select :: Array Int -> Array a -> Array a
@@ -355,26 +398,20 @@ rerank r a
 take :: Array Int -> Array a -> Either HuihuaWarning (Array a)
 take i a
   | D.rank i > 1 || D.length i > D.rank a = Left BadTake
-  | otherwise = Right $ D.takes (zip [0..] (D.arrayAs i)) a
+  | otherwise = Right $ D.rowWise (D.dimsWise D.take) (D.arrayAs i) a
 
 drop :: Array Int -> Array a -> Either HuihuaWarning (Array a)
 drop i a
   | D.rank i > 1 || D.length i > D.rank a = Left BadTake
-  | otherwise = Right $ D.drops (zip [0..] (D.arrayAs i)) a
+  | otherwise = Right $ D.rowWise (D.dimsWise D.drop) (D.arrayAs i) a
 
---- >>> rise (D.asArray [6,2,7,0,-1,5])
-rise :: (Ord a) => Array a -> Array Int
-rise a = D.orders [0] $ D.extracts [0] a
-
---- >>> rise (D.asArray [6,2,7,0,-1,5])
-fall :: (Ord a) => Array a -> Array Int
-fall a = D.ordersBy [0] (fmap Down) $ D.extracts [0] a
-
--- |
 windows :: Array Int -> Array a -> Array a
 windows ws a = D.windows ws' a
   where
     ws' = List.zipWith (\w s -> bool w (s - w + 1) (w<0)) (D.arrayAs ws) (D.shape a)
+
+keep :: Array Int -> Array a -> Array a
+keep i a = D.join $ D.asArray $ fold $ D.zipWithE replicate (D.cycle (List.take 1 $ D.shape a) i) (D.extracts [0] a)
 
 find :: (Eq a) => Array a -> Array a -> Array Int
 find i a = D.pad 0 (D.shape a :: [Int]) (fmap sig $ D.find i a)
@@ -386,23 +423,10 @@ mask i a = m
     found = fmap sig $ D.findNoOverlap iexp a
     accf = V.drop 1 . V.map snd . V.scanl' (\(acc,_) x -> bool (acc+1,acc+1) (acc,0) (x==0)) (0,0)
     found' = D.unsafeModifyVector accf found
-    found'' = D.pad 0 (D.shape @[Int] a) found'
-    -- sh = List.zipWith (\i' a' -> a' - i' + 1) (D.shape iexp <> replicate (D.rank a - D.rank iexp) one) (D.shape a)
+    found'' = D.pad 0 (D.shape a) found'
     start = (\s -> 1 - s) <$> D.shape iexp
     backchecks s = List.zip (List.zipWith (\s0 s' -> (max zero (s0+s'))) start s) (List.zipWith (\i' s' -> min i' (s'+1)) (D.shape iexp) s)
-    m = D.tabulate (D.shape a) (\s -> sum (D.sliceR (backchecks s) found''))
-
-
-
--- | find the matching sub-array positions but only if they dont overlap with previous matches.  previous doing a lot of work here.
-maskFind :: (Eq a) => Array a -> Array a -> Array Int
-maskFind i a = r
-  where
-    start = (one -) <$> D.shape i
-    r = D.tabulate (D.shape @[Int] a) go
-    go s = (sig ((D.index l s == 1) && all (==0) (V.init (D.asVector (D.sliceR (backchecks s) r) ))))
-    l = D.rotate start  (find i a)
-    backchecks s = zip (List.zipWith (\s0 s' -> max zero (s0+s')) start s) (D.shape i)
+    m = D.tabulate (D.shape a) (\s -> sum (D.rowWise (D.dimsWise D.slice) (backchecks s) found''))
 
 -- * reducing operators
 reduceBool :: (Ring b) => (a -> a -> Bool) -> Array a -> Array b

@@ -258,13 +258,14 @@ glyphP =
             "⊢" -> pure First
             "⇌" -> pure Reverse
             "♭" -> pure Deshape
+            "¤" -> pure Fix
             "⋯" -> pure Bits
             "⍉" -> pure Transpose
             "⍏" -> pure Rise
             "⍖" -> pure Fall
             "⊚" -> pure Where
             "⊛" -> pure Classify
-            "⊝" -> pure Deduplicate
+            "◴" -> pure Deduplicate
             "◰" -> pure Unique
             "□" -> pure Box
             "≍" -> pure Match

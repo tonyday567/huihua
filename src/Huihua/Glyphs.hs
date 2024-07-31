@@ -249,6 +249,7 @@ glyphs =
   , GlyphDeets First "⊢" (OperatorG Monadic SingleOutput ArrayAction)
   , GlyphDeets Reverse "⇌" (OperatorG Monadic SingleOutput ArrayAction)
   , GlyphDeets Deshape "♭" (OperatorG Monadic SingleOutput ArrayAction)
+  , GlyphDeets Fix "¤" (OperatorG Monadic SingleOutput ArrayAction)
   , GlyphDeets Bits "⋯" (OperatorG Monadic SingleOutput ArrayAction)
   , GlyphDeets Transpose "⍉" (OperatorG Monadic SingleOutput ArrayAction)
   , GlyphDeets Rise "⍏" (OperatorG Monadic SingleOutput ArrayAction)
@@ -394,6 +395,7 @@ applyMonadic Length x = U.length x
 applyMonadic Shape x = U.shape x
 applyMonadic Range x = U.range x
 applyMonadic First x = U.first x
+applyMonadic Reverse x = U.reverse x
 applyMonadic Deshape x = U.deshape x
 applyMonadic Bits x = U.bits x
 applyMonadic Fix x = U.fix x
@@ -403,6 +405,7 @@ applyMonadic Fall x = U.fall x
 applyMonadic Where x = U.where' x
 applyMonadic Classify x = U.classify x
 applyMonadic Deduplicate x = U.deduplicate x
+applyMonadic Unique x = U.unique x
 applyMonadic _ _ = Left NYI
 
 applyDyadic :: Glyph -> ArrayU -> ArrayU -> Res
@@ -437,9 +440,8 @@ applyDyadic Windows x y = U.windows x y
 applyDyadic Keep x y = U.keep x y
 applyDyadic Find x y = U.find x y
 applyDyadic Mask x y = U.mask x y
--- FIXME:
-applyDyadic Member _ _ = undefined
-applyDyadic IndexOf _ _ = undefined
+applyDyadic Member x y = U.member x y
+applyDyadic IndexOf x y = U.indexOf x y
 applyDyadic _ _ _ = Left NYI
 
 pushRes :: [ArrayU] -> Res -> Either HuihuaWarning Stack
