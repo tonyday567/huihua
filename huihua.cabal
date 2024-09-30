@@ -88,8 +88,9 @@ library
   default-extensions:
   build-depends:
     base >= 4.7 && <5,
-    numhask,
-    numhask-array,
+    harry,
+    -- numhask,
+    -- numhask-array,
     random,
     adjunctions,
     distributive,

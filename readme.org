@@ -18,10 +18,10 @@ https://www.uiua.org/docs/
 :set -XRebindableSyntax
 :set -XQuasiQuotes
 import Prelude qualified
-import NumHask.Prelude hiding ((.))
-import NumHask.Prelude qualified as P
-import NumHask.Array.Dynamic qualified as D
-import NumHask.Array.Shape qualified as Shape
+import Prelude hiding ((.))
+import Prelude qualified as P
+import Harry.Dynamic qualified as D
+import Harry.Shape qualified as Shape
 import Huihua.ArrayU as U
 import Huihua.Array qualified as A
 import Huihua.Stack
@@ -332,71 +332,6 @@ pretty $ fmap sig $ D.findNoOverlap i a
     pretty $ fmap sig $ D.find i a
     pretty $ fmap sig r
     #+end_src
-
-    #+RESULTS:
-    #+begin_example
-    <interactive>:95:12: error: [GHC-87543]
-        Ambiguous occurrence ‘rerank’.
-        It could refer to
-           either ‘Huihua.Array.rerank’, defined at src/Huihua/Array.hs:351:1,
-               or ‘U.rerank’,
-                  imported from ‘Huihua.ArrayU’
-                  (and originally defined at src/Huihua/ArrayU.hs:676:1-6).
-    <interactive>:96:9: error: [GHC-87543]
-        Ambiguous occurrence ‘find’.
-        It could refer to
-           either ‘NumHask.Prelude.find’,
-                  imported from ‘NumHask.Prelude’
-                  (and originally defined in ‘Data.Foldable’),
-               or ‘Huihua.Array.find’, defined at src/Huihua/Array.hs:383:1,
-               or ‘U.find’,
-                  imported from ‘Huihua.ArrayU’
-                  (and originally defined at src/Huihua/ArrayU.hs:729:1-4).
-    <interactive>:97:104: error: [GHC-88464]
-        Variable not in scope: arrayAs :: a0 -> [[a]]
-        Suggested fix:
-          Perhaps use one of these:
-            ‘D.arrayAs’ (imported from NumHask.Array.Dynamic),
-            ‘D.array’ (imported from NumHask.Array.Dynamic),
-            record field of ArrayU ‘arrayd’ (imported from Huihua.ArrayU)
-
-    <interactive>:97:114: error: [GHC-88464]
-        Variable not in scope: tabulate :: [c] -> ([c] -> [c]) -> a0
-        Suggested fix:
-          Perhaps use one of these:
-            ‘D.tabulate’ (imported from NumHask.Array.Dynamic),
-            ‘D.tabulateA’ (imported from NumHask.Array.Dynamic)
-    <interactive>:98:66: error: [GHC-76037] Not in scope: ‘S.inside’
-
-    <interactive>:98:76: error: [GHC-87543]
-        Ambiguous occurrence ‘shape’.
-        It could refer to
-           either ‘Huihua.Array.shape’, defined at src/Huihua/Array.hs:233:1,
-               or ‘U.shape’,
-                  imported from ‘Huihua.ArrayU’
-                  (and originally defined at src/Huihua/ArrayU.hs:295:1-5).
-
-    <interactive>:98:119: error: [GHC-87543]
-        Ambiguous occurrence ‘shape’.
-        It could refer to
-           either ‘Huihua.Array.shape’, defined at src/Huihua/Array.hs:233:1,
-               or ‘U.shape’,
-                  imported from ‘Huihua.ArrayU’
-                  (and originally defined at src/Huihua/ArrayU.hs:295:1-5).
-    <interactive>:99:19: error: [GHC-87543]
-        Ambiguous occurrence ‘shape’.
-        It could refer to
-           either ‘Huihua.Array.shape’, defined at src/Huihua/Array.hs:233:1,
-               or ‘U.shape’,
-                  imported from ‘Huihua.ArrayU’
-                  (and originally defined at src/Huihua/ArrayU.hs:295:1-5).
-    [[1,1,1],
-     [1,1,1],
-     [1,1,1]]
-    [[1,0,1],
-     [0,0,0],
-     [1,0,1]]
-    #+end_example
 
 *** tests
 

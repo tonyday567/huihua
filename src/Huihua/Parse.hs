@@ -8,12 +8,12 @@
 
 module Huihua.Parse where
 
-import NumHask.Prelude as P hiding (First, null)
+import Prelude as P hiding (null)
 import FlatParse.Basic as FP
 import Huihua.Parse.FlatParse
 import Data.ByteString (ByteString)
-import NumHask.Array.Dynamic qualified as D
-import NumHask.Array.Dynamic (Array)
+import Harry.Dynamic qualified as D
+import Harry.Dynamic (Array)
 import Data.List qualified as List
 import Huihua.Stack as S
 import Huihua.ArrayU
@@ -23,11 +23,15 @@ import Control.Monad
 import Prettyprinter
 import Huihua.Glyphs
 import Data.Bifunctor
+import Control.Applicative as A
+import Data.Bool (bool)
+import Data.Function ((&))
+import Data.Maybe (fromMaybe)
 
 -- $setup
 -- >>> :set -XOverloadedStrings
 -- >>> import Huihua.Parse as P
--- >>> import NumHask.Array.Dynamic as A
+-- >>> import Harry.Dynamic as A
 -- >>> import Data.List qualified as List
 -- >>> import Huihua.Examples
 -- >>> import Prettyprinter
@@ -140,11 +144,11 @@ data Instruction = IOp Glyph | IReduceOp Glyph | WArray (Array Instruction) | IA
 
 aInstruction :: Assembler Token Instruction
 aInstruction =
-  (IReduceOp <$> aReduceOp) P.<|>
-  (IOp <$> aOp) P.<|>
-  (IArray <$> aArray aDouble) P.<|>
-  (IArray <$> aArrayStrand aDouble) P.<|>
-  (WArray <$> aArray aInstruction) P.<|>
+  (IReduceOp <$> aReduceOp) A.<|>
+  (IOp <$> aOp) A.<|>
+  (IArray <$> aArray aDouble) A.<|>
+  (IArray <$> aArrayStrand aDouble) A.<|>
+  (WArray <$> aArray aInstruction) A.<|>
   (IArray . D.toScalar <$> aDouble)
 
 aInstructions :: Assembler Token [Instruction]
@@ -175,7 +179,7 @@ istep (IArray x) (Stack s) = Right (Stack (ArrayU x:s))
 istep (WArray x) (Stack s) = second (Stack . (:s) . ArrayU) a
   where
     a = case interpI (D.arrayAs x) of
-          (Right (Stack xs)) -> Data.Bifunctor.first (const RaggedInternal) (D.joinSafe (D.asArray (fmap arrayd xs)))
+          (Right (Stack xs)) -> maybe (Left RaggedInternal) Right (D.joinSafe (D.asArray (fmap arrayd xs)))
           (Left w) -> Left w
 istep (IReduceOp op) s = applyReduceOp op s
 istep _ (Stack _) = Left NYI

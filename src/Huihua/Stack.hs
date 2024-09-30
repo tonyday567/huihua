@@ -7,10 +7,10 @@ module Huihua.Stack
   )
 where
 
-import NumHask.Prelude
-import NumHask.Prelude qualified as P
-import NumHask.Array.Dynamic
-import NumHask.Array.Shape
+import Prelude
+import Prelude qualified as P
+import Harry.Dynamic
+import Harry.Shape
 import Data.Distributive (Distributive (..))
 import Data.Functor.Rep
 import Data.Vector qualified as V
@@ -22,7 +22,7 @@ import Huihua.ArrayU
 -- $setup
 -- >>> :set -XOverloadedStrings
 -- >>> import Huihua.Stack as S
--- >>> import NumHask.Array.Dynamic as A
+-- >>> import Harry.Dynamic as A
 
 newtype Stack =
   Stack { stackList :: [ArrayU] } deriving (Show, Eq, Semigroup, Monoid)

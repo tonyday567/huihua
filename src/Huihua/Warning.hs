@@ -1,5 +1,3 @@
-{-# LANGUAGE RebindableSyntax #-}
-
 module Huihua.Warning
   (
   HuihuaWarning (..),
@@ -11,12 +9,14 @@ module Huihua.Warning
   )
 where
 
-import NumHask.Prelude
+import Prelude
+import Control.Category ((>>>))
 import Data.These
+import Data.Bool
 import Data.List qualified as List
 
 data HuihuaWarning =
-    NumHaskError String | NYI | EmptyStack1 | EmptyStack2 | ApplyFunction | NotBox | TypeMismatch | SizeMismatch | RankMismatch | NotNat | EmptyArray | NotArray | NoScalarOp | OutOfBounds | NoOpenArray | NotReduceable | ApplyNonOperator | RaggedInternal | NoIdentity | BadPick | BadTake deriving (Eq, Ord, Show)
+    HuihuaError String | NYI | EmptyStack1 | EmptyStack2 | ApplyFunction | NotBox | TypeMismatch | SizeMismatch | RankMismatch | NotNat | EmptyArray | NotArray | NoScalarOp | OutOfBounds | NoOpenArray | NotReduceable | ApplyNonOperator | RaggedInternal | NoIdentity | BadPick | BadTake deriving (Eq, Ord, Show)
 
 showWarnings :: [HuihuaWarning] -> String
 showWarnings = List.nub >>> fmap show >>> unlines

@@ -9,17 +9,18 @@
 module Huihua.Glyphs where
 
 import Data.Map.Strict qualified as Map
-import NumHask.Prelude as P hiding (First, null, diff)
+import Prelude as P hiding (null)
 import Data.ByteString (ByteString)
-import NumHask.Array.Dynamic qualified as D
+import Harry.Dynamic qualified as D
 import Huihua.Warning
 import Huihua.ArrayU as U
 import Huihua.Stack
+import Data.Function ((&))
 
 -- $setup
 -- >>> :set -XOverloadedStrings
 -- >>> import Huihua.Parse as P
--- >>> import NumHask.Array.Dynamic as A
+-- >>> import Harry.Dynamic as A
 --
 
 data InputArity = Monadic | Dyadic deriving (Eq, Show)
@@ -182,7 +183,7 @@ data Glyph =
 data GlyphDeets = GlyphDeets { glyph :: Glyph, symbol :: ByteString, glyphCategory :: GlyphCategory }
 
 glyphM :: Map.Map Glyph GlyphDeets
-glyphM = fromList $ zip (fmap glyph glyphs) glyphs
+glyphM = Map.fromList $ zip (fmap glyph glyphs) glyphs
 
 glyphs :: [GlyphDeets]
 glyphs =
@@ -377,7 +378,7 @@ applyNonadic :: Glyph -> Res
 applyNonadic Eta = Right $ pure $ ArrayU (D.toScalar $ 0.5 * pi)
 applyNonadic Pi = Right $ pure $ ArrayU (D.toScalar pi)
 applyNonadic Tau = Right $ pure $ ArrayU (D.toScalar $ 2 * pi)
-applyNonadic Infinity = Right $ pure $ ArrayU (D.toScalar infinity)
+applyNonadic Infinity = Right $ pure $ ArrayU (D.toScalar $ 1 / 0)
 applyNonadic Random = Left NYI
 applyNonadic _ = Left NYI
 

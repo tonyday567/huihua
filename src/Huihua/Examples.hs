@@ -9,14 +9,15 @@ import Data.Text.Encoding (encodeUtf8)
 -- $setup
 -- >>> :set -XOverloadedStrings
 -- >>> :set -XQuasiQuotes
--- >>> import NumHask.Prelude
+-- >>> import Prelude
 -- >>> import Data.String.Interpolate
 -- >>> import Huihua.Examples
 -- >>> import Huihua.Parse as P
--- >>> import NumHask.Array.Dynamic as A
+-- >>> import Harry.Dynamic as A
 -- >>> import Data.List qualified as List
 -- >>> import Data.ByteString.Char8 qualified as C
 -- >>> import FlatParse.Basic
+-- >>> import Data.Function ((&))
 --
 -- yet to be implemented
 --

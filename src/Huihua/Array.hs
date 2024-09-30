@@ -6,7 +6,7 @@
 {-# OPTIONS_GHC -fno-warn-incomplete-uni-patterns #-}
 {-# OPTIONS_GHC -Wno-x-partial #-}
 
--- | uiua API over numhask-array
+-- | uiua API over harry
 module Huihua.Array
   (
     dyadicPervasive,
@@ -96,30 +96,34 @@ module Huihua.Array
   )
 where
 
-import NumHask.Array.Dynamic (Array(..))
-import NumHask.Array.Dynamic qualified as D
-import NumHask.Array.Shape qualified as Shape
+import Harry.Dynamic (Array(..))
+import Harry.Dynamic qualified as D
+import Harry.Shape qualified as S
 import Data.Vector qualified as V
-import NumHask.Prelude hiding (not, sqrt, sin, floor, ceiling, round, minimum, maximum, length, reverse, fix, take, drop, find, diff)
-import NumHask.Prelude qualified as P
+import Prelude hiding (not, sqrt, sin, floor, ceiling, round, minimum, maximum, length, reverse, take, drop, subtract)
+import Prelude qualified as P
 import Data.Bits hiding (rotate)
 import Data.Ord
 import Data.Map.Strict qualified as Map
 import Data.Set qualified as Set
 import Huihua.Warning
 import Data.List qualified as List
+import Data.Bool hiding (not)
+import Data.Foldable hiding (find, length, maximum, minimum)
+import Data.Function hiding (fix)
+import Data.Maybe
 
 -- $setup
 -- >>> :set -XOverloadedStrings
 -- >>> import Huihua.Array as A
--- >>> import NumHask.Array.Dynamic as D
+-- >>> import Harry.Dynamic as D
 -- >>> import Prettyprinter
 
 -- | Dyadic pervasive
 dyadicPervasive :: (b -> a -> c) -> Array a -> Array b -> Either HuihuaWarning (Array c)
 dyadicPervasive op a b
-  | (D.shape a) `List.isPrefixOf` (D.shape b) = Right $ (D.transmit (D.zipWithE (flip op)) a b)
-  | (D.shape b) `List.isPrefixOf` (D.shape a) = Right $ (D.transmit (D.zipWithE op) b a)
+  | (D.shape a) `List.isPrefixOf` (D.shape b) = Right $ (D.transmit (D.zipWith (flip op)) a b)
+  | (D.shape b) `List.isPrefixOf` (D.shape a) = Right $ (D.transmit (D.zipWith op) b a)
   | otherwise = Left SizeMismatch
 
 -- | Apply a binary boolean function, right-to-left
@@ -129,7 +133,7 @@ dyadicPervasiveBool f = dyadicPervasive (\x x' -> sig (f x x'))
 -- | https://www.uiua.org/docs/reduce
 --
 reduceU :: (a -> b -> b) -> b -> Array a -> Array b
-reduceU f a0 a = D.reduces [0] (foldl' (flip f) a0) a
+reduceU f a0 a = D.reduces (S.exceptDims [0] (D.shape a)) (foldl' (flip f) a0) a
 
 -- | Version for no identity functions
 --
@@ -138,53 +142,53 @@ reduce1U f a
   | null a = Left NoIdentity
   | D.length a == 1 = Right (D.select 0 0 a)
   | otherwise =
-      let (x D.:| xs) = a in
-      Right (D.zipWithE (foldl' (flip f)) x (D.extractsExcept [0] xs))
+      let (x D.:> xs) = a in
+      Right (D.zipWith (foldl' (flip f)) x (D.extracts (S.exceptDims [0] (D.shape xs)) xs))
 
 -- * uiua api
-not :: (Ring a) => Array a -> Array a
-not = fmap (one-)
+not :: (Num a) => Array a -> Array a
+not = fmap (1-)
 
-(¬) :: (Ring a) => Array a -> Array a
+(¬) :: (Num a) => Array a -> Array a
 (¬) = not
 
-sign :: (Base a~a, Basis a) => Array a -> Array a
+sign :: (Num a) => Array a -> Array a
 sign = fmap signum
 
-negate' :: (Subtractive a) => Array a -> Array a
-negate' = fmap P.negate
+negate' :: (Num a) => Array a -> Array a
+negate' = fmap negate
 
-absolute :: (Mag a~a, Basis a) => Array a -> Array a
-absolute = fmap P.abs
+absolute :: (Num a) => Array a -> Array a
+absolute = fmap abs
 
-sqrt :: (ExpField a) => Array a -> Array a
+sqrt :: (Floating a) => Array a -> Array a
 sqrt = fmap P.sqrt
 
-sin :: (TrigField a) => Array a -> Array a
+sin :: (Floating a) => Array a -> Array a
 sin = fmap P.sin
 
-floor :: (QuotientField a, Ring (Whole a)) => Array a -> Array (Whole a)
+floor :: (RealFrac a) => Array a -> Array Int
 floor = fmap P.floor
 
-ceiling :: (QuotientField a, Ring (Whole a)) => Array a -> Array (Whole a)
+ceiling :: (RealFrac a) => Array a -> Array Int
 ceiling = fmap P.ceiling
 
-round :: (QuotientField a, Eq (Whole a), Ring (Whole a)) => Array a -> Array (Whole a)
+round :: (RealFrac a) => Array a -> Array Int
 round = fmap P.round
 
 sig :: Bool -> Int
-sig = bool zero one
+sig = bool 0 1
 
-add :: (Additive a) => Array a -> Array a -> Either HuihuaWarning (Array a)
+add :: (Num a) => Array a -> Array a -> Either HuihuaWarning (Array a)
 add = dyadicPervasive (+)
 
-subtract :: (Subtractive a) => Array a -> Array a -> Either HuihuaWarning (Array a)
+subtract :: (Num a) => Array a -> Array a -> Either HuihuaWarning (Array a)
 subtract = dyadicPervasive (-)
 
-multiply :: (Multiplicative a) => Array a -> Array a -> Either HuihuaWarning (Array a)
+multiply :: (Num a) => Array a -> Array a -> Either HuihuaWarning (Array a)
 multiply = dyadicPervasive (*)
 
-divide :: (Divisive a) => Array a -> Array a -> Either HuihuaWarning (Array a)
+divide :: (Fractional a) => Array a -> Array a -> Either HuihuaWarning (Array a)
 divide = dyadicPervasive (/)
 
 equals :: (Eq a) => Array a -> Array a -> Either HuihuaWarning (Array Int)
@@ -213,14 +217,14 @@ modulus = dyadicPervasive modD
 -- 2.5
 modD :: Double -> Double -> Double
 modD n d
-  | d == infinity = n
-  | d == 0 = nan
-  | otherwise = n - d * fromIntegral (P.floor (n/d))
+  | d == (1 / 0) = n
+  | d == 0 = (0 / 0)
+  | otherwise = n - d * fromIntegral (P.floor (n/d) :: Int)
 
-power :: (ExpField a) => Array a -> Array a -> Either HuihuaWarning (Array a)
+power :: (Floating a) => Array a -> Array a -> Either HuihuaWarning (Array a)
 power = dyadicPervasive (**)
 
-logarithm :: (ExpField a) => Array a -> Array a -> Either HuihuaWarning (Array a)
+logarithm :: (Floating a) => Array a -> Array a -> Either HuihuaWarning (Array a)
 logarithm = dyadicPervasive (\x x' -> log x / log x')
 
 minimum :: (Ord a) => Array a -> Array a -> Either HuihuaWarning (Array a)
@@ -229,7 +233,7 @@ minimum = dyadicPervasive P.min
 maximum :: (Ord a) => Array a -> Array a -> Either HuihuaWarning (Array a)
 maximum = dyadicPervasive P.max
 
-atangent :: (TrigField a) => Array a -> Array a -> Either HuihuaWarning (Array a)
+atangent :: (RealFloat a) => Array a -> Array a -> Either HuihuaWarning (Array a)
 atangent = dyadicPervasive (flip atan2)
 
 length :: Array a -> Array Int
@@ -237,8 +241,8 @@ length = D.toScalar . D.length
 
 range :: Array Int -> Array Int
 range a
-  | D.rank a == 0 = bool (D.range [D.fromScalar a]) (fmap (negate one -) $ D.range [abs $ D.fromScalar a]) (D.fromScalar a < zero)
-  | otherwise = D.join $ D.tabulate (D.arrayAs a') (\s -> D.asArray $ D.zipWithE (\ab si -> bool ab (negate one - ab) (si<0)) (D.asArray s) s' )
+  | D.rank a == 0 = bool (D.range [D.fromScalar a]) (fmap (negate 1 -) $ D.range [abs $ D.fromScalar a]) (D.fromScalar a < 0)
+  | otherwise = D.join $ D.tabulate (D.arrayAs a') (\s -> D.asArray $ D.zipWith (\ab si -> bool ab (negate 1 - ab) (si<0)) (D.asArray s) s' )
   where
     a' = fmap abs a
     s' = fmap signum a
@@ -273,7 +277,7 @@ bits a = D.join bs'
 
 -- | Rotate the axes by 1
 transpose :: Array a -> Array a
-transpose a = D.reorder (Shape.rotate 1 [0..D.rank a-1]) a
+transpose a = D.reorder (S.rotate 1 [0..D.rank a-1]) a
 
 rise :: (Ord a) => Array a -> Array Int
 rise a = D.orders [0] $ D.extracts [0] a
@@ -282,7 +286,7 @@ fall :: (Ord a) => Array a -> Array Int
 fall a = D.ordersBy [0] (fmap Down) $ D.extracts [0] a
 
 where' :: Array Int -> Array Int
-where' a = D.join $ D.asArray $ fmap D.asArray $ fold $ D.zipWithE replicate a (D.indices (D.shape a))
+where' a = D.join $ D.asArray $ fmap D.asArray $ fold $ D.zipWith replicate a (D.indices (D.shape a))
 
 classifyScan :: (Ord a) => [a] -> [Int]
 classifyScan [] = []
@@ -322,7 +326,7 @@ unique a = (D.asArray . fmap fst . uniqueScan . D.arrayAs) (D.extracts [0] a)
 
 member :: (Ord a) => Array a -> Array a -> Array Int
 member i a
-  | D.isScalar i = fmap (sig . Set.member (D.fromScalar i) . Set.fromList . toList) (D.extractsExcept [D.rank a - 1] a)
+  | D.isScalar i = fmap (sig . Set.member (D.fromScalar i) . Set.fromList . toList) (D.extracts (S.exceptDims [D.rank a - 1] (D.shape a)) a)
   | otherwise = D.asArray (fmap sig ks)
   where
     spliti
@@ -334,9 +338,9 @@ member i a
 
 indexOf :: Eq a => Array a -> Array a -> Array Int
 indexOf i a
-  | D.isScalar i = fmap (\x -> findI x (D.fromScalar i)) (D.extractsExcept [D.rank a - 1] a)
+  | D.isScalar i = fmap (\x -> findI x (D.fromScalar i)) (D.extracts (S.exceptDims [D.rank a - 1] (D.shape a)) a)
   | D.rank a == 1 = fmap (findI a) i
-  | otherwise = fmap (findI (D.extractsExcept [D.rank a - 1] a)) (D.extractsExcept [D.rank i - 1] i)
+  | otherwise = fmap (findI (D.extracts (S.exceptDims [D.rank a - 1] (D.shape a)) a)) (D.extracts (S.exceptDims [D.rank i - 1] (D.shape i)) i)
   where
     findI xs i' = fromMaybe (List.length xs) . List.findIndex (==i') . toList $ xs
 
@@ -346,7 +350,7 @@ match a a' = D.toScalar (bool 0 1 (a==a'))
 pick :: Array Int -> Array a -> Either HuihuaWarning (Array a)
 pick i a
   | D.length (first i) > D.rank a = Left BadPick
-  | otherwise = Right $ D.join $ fmap (\s -> D.rowWise D.selects (D.arrayAs s) a) (D.extracts [0..(D.rank i) - 2] i)
+  | otherwise = Right $ D.join $ fmap (\s -> D.rowWise D.indexes (D.arrayAs s) a) (D.extracts [0..(D.rank i) - 2] i)
 
 rotate :: Array Int -> Array a -> Array a
 rotate r a = D.rowWise (D.dimsWise D.rotate) (D.arrayAs r) a
@@ -363,7 +367,7 @@ join a a'
 
 -- | Select multiple rows from an array
 select :: Array Int -> Array a -> Array a
-select i a = D.joins [0..(D.rank i) - 1] $ (\x -> D.selects [(0,x)] a) <$> i
+select i a = D.joins [0..(D.rank i) - 1] $ (\x -> D.indexes [0] [x] a) <$> i
 
 -- |
 --
@@ -411,7 +415,7 @@ windows ws a = D.windows ws' a
     ws' = List.zipWith (\w s -> bool w (s - w + 1) (w<0)) (D.arrayAs ws) (D.shape a)
 
 keep :: Array Int -> Array a -> Array a
-keep i a = D.join $ D.asArray $ fold $ D.zipWithE replicate (D.cycle (List.take 1 $ D.shape a) i) (D.extracts [0] a)
+keep i a = D.join $ D.asArray $ fold $ D.zipWith replicate (D.cycle (List.take 1 $ D.shape a) i) (D.extracts [0] a)
 
 find :: (Eq a) => Array a -> Array a -> Array Int
 find i a = D.pad 0 (D.shape a :: [Int]) (fmap sig $ D.find i a)
@@ -425,12 +429,12 @@ mask i a = m
     found' = D.unsafeModifyVector accf found
     found'' = D.pad 0 (D.shape a) found'
     start = (\s -> 1 - s) <$> D.shape iexp
-    backchecks s = List.zip (List.zipWith (\s0 s' -> (max zero (s0+s'))) start s) (List.zipWith (\i' s' -> min i' (s'+1)) (D.shape iexp) s)
-    m = D.tabulate (D.shape a) (\s -> sum (D.rowWise (D.dimsWise D.slice) (backchecks s) found''))
+    backchecks s = List.zip (List.zipWith (\s0 s' -> (max 0 (s0+s'))) start s) (List.zipWith (\i' s' -> min i' (s'+1)) (D.shape iexp) s)
+    m = D.tabulate (D.shape a) (\s -> sum (D.rowWise (D.dimsWise (\d (o,l) -> D.slice d o l)) (backchecks s) found''))
 
 -- * reducing operators
-reduceBool :: (Ring b) => (a -> a -> Bool) -> Array a -> Array b
-reduceBool f a = fmap (bool zero one . any id) (D.reduces [0] (D.diffE 1 f) a)
+reduceBool :: (Num b) => (a -> a -> Bool) -> Array a -> Array b
+reduceBool f a = fmap (bool 0 1 . any id) (D.reduces (S.exceptDims [0] (D.shape a)) (D.diffs [0] [1] (D.zipWith f)) a)
 
 equalsR :: (Eq a) => Array a -> Array Int
 equalsR = reduceBool (==)
@@ -450,29 +454,29 @@ greaterThanR = reduceBool (>)
 greaterOrEqualR :: (Ord a) => Array a -> Array Int
 greaterOrEqualR = reduceBool (>=)
 
-addR :: (Additive a) => Array a -> Array a
-addR = reduceU (+) zero
+addR :: (Num a) => Array a -> Array a
+addR = reduceU (+) 0
 
-subtractR :: (Subtractive a) => Array a -> Array a
-subtractR = reduceU (-) zero
+subtractR :: (Num a) => Array a -> Array a
+subtractR = reduceU (-) 0
 
-divideR :: (Divisive a) => Array a -> Array a
-divideR = reduceU (/) one
+divideR :: (Fractional a) => Array a -> Array a
+divideR = reduceU (/) 1
 
-multiplyR :: (Multiplicative a) => Array a -> Array a
-multiplyR = reduceU (*) one
+multiplyR :: (Num a) => Array a -> Array a
+multiplyR = reduceU (*) 1
 
-minimumR :: (Ord a, BoundedMeetSemiLattice a) => Array a -> Array a
-minimumR = reduceU min top
+minimumR :: (Ord a, Fractional a) => Array a -> Array a
+minimumR = reduceU min (1/0)
 
-maximumR :: (Ord a, BoundedJoinSemiLattice a) => Array a -> Array a
-maximumR = reduceU max bottom
+maximumR :: (Ord a, Fractional a) => Array a -> Array a
+maximumR = reduceU max (-1 / 0)
 
 modulusR :: Array Double -> Array Double
-modulusR = reduceU modD infinity
+modulusR = reduceU modD (1 / 0)
 
-powerR :: (ExpField a, Multiplicative a) => Array a -> Array a
-powerR = reduceU (**) one
+powerR :: (Floating a) => Array a -> Array a
+powerR = reduceU (**) 1
 
-logarithmR :: (ExpField a) => Array a -> Either HuihuaWarning (Array a)
+logarithmR :: (Floating a) => Array a -> Either HuihuaWarning (Array a)
 logarithmR = reduce1U (flip logBase)

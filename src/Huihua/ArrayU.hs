@@ -6,7 +6,7 @@
 {-# OPTIONS_GHC -fno-warn-incomplete-uni-patterns #-}
 {-# OPTIONS_GHC -Wno-x-partial #-}
 
--- | Compatability layer between NumHask.Dynamic.Array and uiua arrays.
+-- | Compatability layer between Harry.Dynamic.Array and uiua arrays.
 --
 -- The main purpose is to change types from Double to Int and back as necessary. (all uiua arrays are doubles).
 module Huihua.ArrayU
@@ -100,14 +100,18 @@ module Huihua.ArrayU
     logarithmR,
     minimumR,
     maximumR,
+
+    -- * testing only
+    ptree,
+    unfoldF,
 )
 where
 
 import Huihua.Array qualified as A
-import NumHask.Array.Dynamic (Array (..))
-import NumHask.Array.Dynamic qualified as D
-import NumHask.Prelude hiding (not, sqrt, sin, floor, ceiling, round, minimum, maximum, length, reverse, fix, take, drop, find)
-import NumHask.Prelude qualified as P
+import Harry.Dynamic (Array (..))
+import Harry.Dynamic qualified as D
+import Prelude hiding (not, sqrt, sin, floor, ceiling, round, minimum, maximum, length, reverse, take, drop, subtract)
+import Prelude qualified as P
 import Huihua.Warning
 import Prettyprinter hiding (equals)
 import Data.List qualified as List
@@ -115,13 +119,17 @@ import Data.Tree qualified as Tree
 import Data.Either
 import Data.Text (Text, pack, unpack)
 import Data.Text qualified as Text
+import GHC.Generics
+import Data.Bool (bool)
+import Data.Function ((&))
+import Data.Maybe
 
 -- $setup
 -- >>> :set -XOverloadedStrings
 -- >>> :set -XQuasiQuotes
 -- >>> import Data.String.Interpolate
 -- >>> import Huihua.Array as A
--- >>> import NumHask.Array.Dynamic as D
+-- >>> import Harry.Dynamic as D
 -- >>> import Prettyprinter
 -- >>> import Huihua.Parse
 
@@ -142,8 +150,8 @@ instance Pretty ArrayU where
     _ -> final
     where
     t = ptree (fmap showU x)
-    maxp = D.reduces [0] (P.maximum . fmap Text.length) (D.join $ D.asArray $ rights t)
-    s = fmap (fmap ((D.zipWithE (\m a -> lpad' ' ' m a) maxp))) t
+    maxp = D.reduces [1] (P.maximum . fmap Text.length) (D.join $ D.asArray $ rights t)
+    s = fmap (fmap ((D.zipWith (\m a -> lpad' ' ' m a) maxp))) t
     sdoc = mconcat $ fmap (either (\n -> replicate (n-1) mempty) (pure . hsep . fmap pretty . D.arrayAs)) s
     sdocMin = D.concatenate 0 (D.konst [max 0 (D.rank x - P.length sdoc - 1)] mempty) (D.asArray sdoc)
     rankPrefix = fmap pretty (D.pad " " [D.length sdocMin] (D.konst [D.rank x - 1] "╷"))
@@ -151,7 +159,7 @@ instance Pretty ArrayU where
     final = (pretty "╭─") <> line <> (vsep deco) <> hang 1 (line <> pretty "╯")
 
 showU :: Double -> Text
-showU x = bool mempty (pack "¯") (x < zero) <> bool (pack $ show (abs x)) (pack $ show (asInt (abs x))) (isInt x)
+showU x = bool mempty (pack "¯") (x < 0) <> bool (pack $ show (abs x)) (pack $ show (asInt (abs x))) (isInt x)
 
 lpad' :: Char -> Int -> Text -> Text
 lpad' c maxl x = (pack $ replicate (maxl - P.length (unpack x)) c) <> x
@@ -176,7 +184,7 @@ arrayi' (ArrayU a) =
   (all isInt a)
 
 isInt :: Double -> Bool
-isInt x = x == fromIntegral (P.floor x)
+isInt x = x == fromIntegral (P.floor x :: Int)
 
 asInt :: Double -> Int
 asInt x = P.floor x

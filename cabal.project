@@ -1,4 +1,3 @@
 packages:
   huihua.cabal
-  ../numhask-array/numhask-array.cabal
-
+  ../harry/harry.cabal
