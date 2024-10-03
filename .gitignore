@@ -6,3 +6,4 @@ cabal.project.local*
 /.hie/
 .ghc.environment.*
 /.hkgr/
+/checklist.org

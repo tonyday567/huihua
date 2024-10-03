@@ -2,8 +2,8 @@
 
 module Huihua.Examples where
 
-import Data.String.Interpolate
 import Data.ByteString (ByteString)
+import Data.String.Interpolate
 import Data.Text.Encoding (encodeUtf8)
 
 -- $setup
@@ -13,7 +13,7 @@ import Data.Text.Encoding (encodeUtf8)
 -- >>> import Data.String.Interpolate
 -- >>> import Huihua.Examples
 -- >>> import Huihua.Parse as P
--- >>> import Harry.Dynamic as A
+-- >>> import Harry.Array as A
 -- >>> import Data.List qualified as List
 -- >>> import Data.ByteString.Char8 qualified as C
 -- >>> import FlatParse.Basic
@@ -69,13 +69,14 @@ import Data.Text.Encoding (encodeUtf8)
 --   5 6
 --       ╯
 
-
 -- |
 --
 -- >>> run exPage1
 -- 4
 exPage1 :: ByteString
-exPage1 = encodeUtf8 [i|
+exPage1 =
+  encodeUtf8
+    [i|
 [1 5 8 2]
 /+. \# Sum
 ⧻:  \# Length
@@ -95,7 +96,9 @@ exPage1 = encodeUtf8 [i|
 --   20 21 22 23
 --               ╯
 exPage2 :: ByteString
-exPage2 = encodeUtf8 [i|
+exPage2 =
+  encodeUtf8
+    [i|
 2_3_4
 /×. \# Product
 ⇡   \# Range
@@ -110,14 +113,16 @@ exPage2 = encodeUtf8 [i|
 -- >>> exPage3 & C.lines & fmap (runParser tokens)
 -- [OK [] "",OK [GlyphToken String,NameToken "Unabashedly",NameToken "I",NameToken "utilize",NameToken "arrays",GlyphToken String] "",OK [GlyphToken NotEquals,CharacterToken ' ',GlyphToken Duplicate,CommentToken " Mask of non-spaces"] "",OK [GlyphToken Partition,GlyphToken First,CommentToken " All first letters"] ""]
 exPage3 :: ByteString
-exPage3 = [i|
+exPage3 =
+  [i|
 "Unabashedly I utilize arrays"
 ≠@ . \# Mask of non-spaces
 ⊜⊢   \# All first letters
 |]
 
 nyiMultiArray :: ByteString
-nyiMultiArray = [i|
+nyiMultiArray =
+  [i|
 [1 2 3
  4 5 6
  7 8 9]

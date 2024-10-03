@@ -2,11 +2,11 @@
 {-# LANGUAGE RebindableSyntax #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# OPTIONS_GHC -Wno-redundant-constraints #-}
+{-# OPTIONS_GHC -Wno-x-partial #-}
 {-# OPTIONS_GHC -fno-warn-incomplete-patterns #-}
 {-# OPTIONS_GHC -fno-warn-incomplete-uni-patterns #-}
-{-# OPTIONS_GHC -Wno-x-partial #-}
 
--- | Compatability layer between Harry.Dynamic.Array and uiua arrays.
+-- | Compatability layer between Harry..Array and uiua arrays.
 --
 -- The main purpose is to change types from Double to Int and back as necessary. (all uiua arrays are doubles).
 module Huihua.ArrayU
@@ -66,7 +66,6 @@ module Huihua.ArrayU
     minimum,
     maximum,
     atangent,
-
     match,
     couple,
     join,
@@ -104,32 +103,32 @@ module Huihua.ArrayU
     -- * testing only
     ptree,
     unfoldF,
-)
+  )
 where
 
-import Huihua.Array qualified as A
-import Harry.Dynamic (Array (..))
-import Harry.Dynamic qualified as D
-import Prelude hiding (not, sqrt, sin, floor, ceiling, round, minimum, maximum, length, reverse, take, drop, subtract)
-import Prelude qualified as P
-import Huihua.Warning
-import Prettyprinter hiding (equals)
-import Data.List qualified as List
-import Data.Tree qualified as Tree
+import Data.Bool (bool)
 import Data.Either
+import Data.Function ((&))
+import Data.List qualified as List
+import Data.Maybe
 import Data.Text (Text, pack, unpack)
 import Data.Text qualified as Text
+import Data.Tree qualified as Tree
 import GHC.Generics
-import Data.Bool (bool)
-import Data.Function ((&))
-import Data.Maybe
+import Harry.Array (Array (..))
+import Harry.Array qualified as D
+import Huihua.Array qualified as A
+import Huihua.Warning
+import Prettyprinter hiding (equals)
+import Prelude hiding (ceiling, drop, floor, length, maximum, minimum, not, reverse, round, sin, sqrt, subtract, take)
+import Prelude qualified as P
 
 -- $setup
 -- >>> :set -XOverloadedStrings
 -- >>> :set -XQuasiQuotes
 -- >>> import Data.String.Interpolate
 -- >>> import Huihua.Array as A
--- >>> import Harry.Dynamic as D
+-- >>> import Harry.Array as D
 -- >>> import Prettyprinter
 -- >>> import Huihua.Parse
 
@@ -141,22 +140,22 @@ import Data.Maybe
 -- ╷       2  2.222
 --   200.001 200.01
 --                  ╯
-newtype ArrayU = ArrayU { arrayd :: Array Double } deriving (Eq, Show, Generic)
+newtype ArrayU = ArrayU {arrayd :: Array Double} deriving (Eq, Show, Generic)
 
 instance Pretty ArrayU where
   pretty (ArrayU x) = case D.rank x of
     0 -> pretty $ showU (D.fromScalar x)
-    1 -> (pretty "[") <> hsep (fmap (pretty . showU) (D.arrayAs x)) <> (pretty "]")
+    1 -> pretty "[" <> hsep (fmap (pretty . showU) (D.arrayAs x)) <> pretty "]"
     _ -> final
     where
-    t = ptree (fmap showU x)
-    maxp = D.reduces [1] (P.maximum . fmap Text.length) (D.join $ D.asArray $ rights t)
-    s = fmap (fmap ((D.zipWith (\m a -> lpad' ' ' m a) maxp))) t
-    sdoc = mconcat $ fmap (either (\n -> replicate (n-1) mempty) (pure . hsep . fmap pretty . D.arrayAs)) s
-    sdocMin = D.concatenate 0 (D.konst [max 0 (D.rank x - P.length sdoc - 1)] mempty) (D.asArray sdoc)
-    rankPrefix = fmap pretty (D.pad " " [D.length sdocMin] (D.konst [D.rank x - 1] "╷"))
-    deco = zipWith (<+>) (D.arrayAs rankPrefix) (D.arrayAs sdocMin)
-    final = (pretty "╭─") <> line <> (vsep deco) <> hang 1 (line <> pretty "╯")
+      t = ptree (fmap showU x)
+      maxp = D.reduces [1] (P.maximum . fmap Text.length) (D.join $ D.asArray $ rights t)
+      s = fmap (fmap (D.zipWith (\m a -> lpad' ' ' m a) maxp)) t
+      sdoc = mconcat $ fmap (either (\n -> replicate (n - 1) mempty) (pure . hsep . fmap pretty . D.arrayAs)) s
+      sdocMin = D.concatenate 0 (D.konst [max 0 (D.rank x - P.length sdoc - 1)] mempty) (D.asArray sdoc)
+      rankPrefix = fmap pretty (D.pad " " [D.length sdocMin] (D.konst [D.rank x - 1] "╷"))
+      deco = zipWith (<+>) (D.arrayAs rankPrefix) (D.arrayAs sdocMin)
+      final = pretty "╭─" <> line <> vsep deco <> hang 1 (line <> pretty "╯")
 
 showU :: Double -> Text
 showU x = bool mempty (pack "¯") (x < 0) <> bool (pack $ show (abs x)) (pack $ show (asInt (abs x))) (isInt x)
@@ -179,9 +178,9 @@ arrayi (ArrayU a) = fmap asInt a
 arrayi' :: ArrayU -> Either HuihuaWarning (Array Int)
 arrayi' (ArrayU a) =
   bool
-  (Left NotNat)
-  (Right (fmap asInt a))
-  (all isInt a)
+    (Left NotNat)
+    (Right (fmap asInt a))
+    (all isInt a)
 
 isInt :: Double -> Bool
 isInt x = x == fromIntegral (P.floor x :: Int)
@@ -200,7 +199,7 @@ type Res = Either HuihuaWarning [ArrayU]
 -- [1 2 3]
 -- [1 2 3]
 duplicate :: ArrayU -> Res
-duplicate x = Right [x,x]
+duplicate x = Right [x, x]
 
 -- | ◌
 --
@@ -248,7 +247,6 @@ negate' (ArrayU a) = Right . pure . ArrayU . A.negate' $ a
 absoluteValue :: ArrayU -> Res
 absoluteValue (ArrayU a) = Right . pure . ArrayU . A.absolute $ a
 
-
 -- | √
 --
 -- >>> run [i|√4|]
@@ -290,7 +288,6 @@ round (ArrayU a) = Right . pure . ArrayU . fmap fromIntegral . A.round $ a
 -- 3
 length :: ArrayU -> Res
 length (ArrayU a) = Right . pure . ArrayU . fmap fromIntegral . A.length $ a
-
 
 -- | △
 --
@@ -376,7 +373,6 @@ fix (ArrayU a) = Right . pure . ArrayU . A.fix $ a
 bits :: ArrayU -> Res
 bits (ArrayU a) = Right . pure . ArrayU . fmap fromIntegral . A.bits . fmap asInt $ a
 
-
 -- | ⍉
 --
 -- >>> run [i|⍉[[1_2 3_4] [5_6 7_8]]|]
@@ -403,7 +399,6 @@ rise (ArrayU a) = Right . pure . ArrayU . fmap fromIntegral . A.rise $ a
 -- [2 0 5 1 4 3]
 fall :: ArrayU -> Res
 fall (ArrayU a) = Right . pure . ArrayU . fmap fromIntegral . A.fall $ a
-
 
 -- | ⊚
 --
@@ -495,7 +490,7 @@ lessThan (ArrayU x) (ArrayU y) = fmap (pure . ArrayU . fmap fromIntegral) $ A.le
 -- >>> run [i|≤5 5|]
 -- 1
 lessOrEqual :: ArrayU -> ArrayU -> Res
-lessOrEqual (ArrayU x) (ArrayU y) =fmap (pure . ArrayU . fmap fromIntegral) $ A.lessOrEqual x y
+lessOrEqual (ArrayU x) (ArrayU y) = fmap (pure . ArrayU . fmap fromIntegral) $ A.lessOrEqual x y
 
 -- | >
 --
@@ -573,12 +568,10 @@ modulus :: ArrayU -> ArrayU -> Res
 modulus (ArrayU x) (ArrayU y) = fmap (pure . ArrayU) $ A.modulus x y
 
 -- | doctest bug
---
 power :: ArrayU -> ArrayU -> Res
 power (ArrayU x) (ArrayU y) = fmap (pure . ArrayU) $ A.power x y
 
 -- | doctest bug
---
 logarithm :: ArrayU -> ArrayU -> Res
 logarithm (ArrayU x) (ArrayU y) = fmap (pure . ArrayU) $ A.logarithm x y
 
@@ -600,7 +593,6 @@ minimum (ArrayU x) (ArrayU y) = fmap (pure . ArrayU) $ A.minimum x y
 maximum :: ArrayU -> ArrayU -> Res
 maximum (ArrayU x) (ArrayU y) = fmap (pure . ArrayU) $ A.maximum x y
 
-
 -- | ∠
 --
 -- >>> run [i|∠ 1 0|]
@@ -609,7 +601,6 @@ maximum (ArrayU x) (ArrayU y) = fmap (pure . ArrayU) $ A.maximum x y
 -- ¯1.5707963267948966
 atangent :: ArrayU -> ArrayU -> Res
 atangent (ArrayU x) (ArrayU y) = fmap (pure . ArrayU) $ A.atangent x y
-
 
 -- | ≍
 --
@@ -782,7 +773,7 @@ rotate (ArrayU x) (ArrayU y) = Right . pure . ArrayU $ A.rotate (fmap asInt x) y
 -- >>> run [i|▽ [3 2] [8 3 9 2 0]|]
 -- [8 8 8 3 3 9 9 9 2 2 0 0 0]
 keep :: ArrayU -> ArrayU -> Res
-keep (ArrayU x) (ArrayU y) = Right . pure . ArrayU $ (A.keep (fmap asInt x) y)
+keep (ArrayU x) (ArrayU y) = Right . pure . ArrayU $ A.keep (fmap asInt x) y
 
 -- | ◫
 --
@@ -806,7 +797,7 @@ windows (ArrayU x) (ArrayU y) = Right . pure . ArrayU $ A.windows (fmap asInt x)
 --   0 0 1 0
 --   0 0 0 0
 --           ╯
-find:: ArrayU -> ArrayU -> Res
+find :: ArrayU -> ArrayU -> Res
 find (ArrayU x) (ArrayU y) = Right . pure . ArrayU . fmap fromIntegral $ A.find x y
 
 -- | ⦷
@@ -863,7 +854,6 @@ greaterThanR (ArrayU x) = Right . pure . ArrayU . fmap fromIntegral $ A.greaterT
 -- [1 1 1]
 greaterOrEqualR :: ArrayU -> Res
 greaterOrEqualR (ArrayU x) = Right . pure . ArrayU . fmap fromIntegral $ A.greaterOrEqualR x
-
 
 -- | /+
 --
