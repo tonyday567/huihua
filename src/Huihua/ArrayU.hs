@@ -1,12 +1,4 @@
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE RebindableSyntax #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# OPTIONS_GHC -Wno-redundant-constraints #-}
-{-# OPTIONS_GHC -Wno-x-partial #-}
-{-# OPTIONS_GHC -fno-warn-incomplete-patterns #-}
-{-# OPTIONS_GHC -fno-warn-incomplete-uni-patterns #-}
-
--- | Compatability layer between Harry..Array and uiua arrays.
+-- | Compatability layer between Harpie..Array and uiua arrays.
 --
 -- The main purpose is to change types from Double to Int and back as necessary. (all uiua arrays are doubles).
 module Huihua.ArrayU
@@ -115,8 +107,8 @@ import Data.Text (Text, pack, unpack)
 import Data.Text qualified as Text
 import Data.Tree qualified as Tree
 import GHC.Generics
-import Harry.Array (Array (..))
-import Harry.Array qualified as D
+import Harpie.Array (Array (..))
+import Harpie.Array qualified as D
 import Huihua.Array qualified as A
 import Huihua.Warning
 import Prettyprinter hiding (equals)
@@ -128,7 +120,7 @@ import Prelude qualified as P
 -- >>> :set -XQuasiQuotes
 -- >>> import Data.String.Interpolate
 -- >>> import Huihua.Array as A
--- >>> import Harry.Array as D
+-- >>> import Harpie.Array as D
 -- >>> import Prettyprinter
 -- >>> import Huihua.Parse
 

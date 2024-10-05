@@ -20,8 +20,8 @@ https://www.uiua.org/docs/
 import Prelude qualified
 import Prelude hiding ((.))
 import Prelude qualified as P
-import Harry.Array qualified as D
-import Harry.Shape qualified as Shape
+import Harpie.Array qualified as D
+import Harpie.Shape qualified as Shape
 import Huihua.ArrayU as U
 import Huihua.Array qualified as A
 import Huihua.Stack

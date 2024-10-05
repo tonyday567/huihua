@@ -2,9 +2,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE NoImplicitPrelude #-}
-{-# OPTIONS_GHC -Wno-incomplete-patterns #-}
-{-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 
 module Huihua.Parse where
@@ -18,8 +15,8 @@ import Data.ByteString.Char8 qualified as C
 import Data.Function ((&))
 import Data.List qualified as List
 import FlatParse.Basic as FP
-import Harry.Array (Array)
-import Harry.Array qualified as D
+import Harpie.Array (Array)
+import Harpie.Array qualified as D
 import Huihua.ArrayU
 import Huihua.Glyphs
 import Huihua.Parse.FlatParse
@@ -31,7 +28,7 @@ import Prelude as P hiding (null)
 -- $setup
 -- >>> :set -XOverloadedStrings
 -- >>> import Huihua.Parse as P
--- >>> import Harry.Array as A
+-- >>> import Harpie.Array as A
 -- >>> import Data.List qualified as List
 -- >>> import Huihua.Examples
 -- >>> import Prettyprinter

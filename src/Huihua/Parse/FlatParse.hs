@@ -1,8 +1,6 @@
-{-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE TypeApplications #-}
 
 -- | Various <https://hackage.haskell.org/package/flatparse flatparse> helpers and combinators.
 module Huihua.Parse.FlatParse
@@ -47,7 +45,6 @@ module Huihua.Parse.FlatParse
   )
 where
 
-import Control.DeepSeq
 import Data.Bool
 import Data.ByteString (ByteString)
 import Data.ByteString.Char8 qualified as B
@@ -97,7 +94,7 @@ runParserEither p bs = case runParser p bs of
 --
 -- >>> runParserWarn (ws `cut` "no whitespace") "x"
 -- This (ParserError "no whitespace")
-data ParserWarning = ParserLeftover ByteString | ParserError ByteString | ParserUncaught deriving (Eq, Show, Ord, Generic, NFData)
+data ParserWarning = ParserLeftover ByteString | ParserError ByteString | ParserUncaught deriving (Eq, Show, Ord, Generic)
 
 -- | Run parser, returning leftovers and errors as 'ParserWarning's.
 --

@@ -1,12 +1,4 @@
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE RebindableSyntax #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# OPTIONS_GHC -Wno-redundant-constraints #-}
-{-# OPTIONS_GHC -Wno-x-partial #-}
-{-# OPTIONS_GHC -fno-warn-incomplete-patterns #-}
-{-# OPTIONS_GHC -fno-warn-incomplete-uni-patterns #-}
-
--- | uiua API over harry
+-- | uiua API for harry
 module Huihua.Array
   ( dyadicPervasive,
     reduceU,
@@ -104,9 +96,9 @@ import Data.Maybe
 import Data.Ord
 import Data.Set qualified as Set
 import Data.Vector qualified as V
-import Harry.Array (Array (..))
-import Harry.Array qualified as D
-import Harry.Shape qualified as S
+import Harpie.Array (Array (..))
+import Harpie.Array qualified as D
+import Harpie.Shape qualified as S
 import Huihua.Warning
 import Prelude hiding (ceiling, drop, floor, length, maximum, minimum, not, reverse, round, sin, sqrt, subtract, take)
 import Prelude qualified as P
@@ -114,7 +106,7 @@ import Prelude qualified as P
 -- $setup
 -- >>> :set -XOverloadedStrings
 -- >>> import Huihua.Array as A
--- >>> import Harry.Array as D
+-- >>> import Harpie.Array as D
 -- >>> import Prettyprinter
 
 -- | Dyadic pervasive
@@ -393,8 +385,6 @@ select i a = D.joins [0 .. D.rank i - 1] $ (\x -> D.indexes [0] [x] a) <$> i
 -- [[1,2],
 --  [3,4],
 --  [5,6]]
---
--- FIXME: bless this mess
 reshape :: Array Int -> Array a -> Array a
 reshape i a
   | D.rank i == 0 = D.repeat (D.fromScalar i : D.shape a) a

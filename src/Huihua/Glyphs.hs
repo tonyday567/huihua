@@ -1,15 +1,12 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE NoImplicitPrelude #-}
 {-# OPTIONS_GHC -Wno-incomplete-patterns #-}
-{-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
-{-# OPTIONS_GHC -Wno-name-shadowing #-}
 
 module Huihua.Glyphs where
 
 import Data.ByteString (ByteString)
 import Data.Function ((&))
 import Data.Map.Strict qualified as Map
-import Harry.Array qualified as D
+import Harpie.Array qualified as D
 import Huihua.ArrayU as U
 import Huihua.Stack
 import Huihua.Warning
@@ -18,7 +15,7 @@ import Prelude as P hiding (null)
 -- $setup
 -- >>> :set -XOverloadedStrings
 -- >>> import Huihua.Parse as P
--- >>> import Harry.Array as A
+-- >>> import Harpie.Array as A
 
 data InputArity = Monadic | Dyadic deriving (Eq, Show)
 
@@ -347,6 +344,10 @@ applyStack By _ = Left NYI
 applyStack Stack' _ = Left NYI
 applyStack Trace _ = Left NYI
 applyStack Dump _ = Left NYI
+applyStack Gap _ = Left NYI
+applyStack Dip _ = Left NYI
+applyStack Both _ = Left NYI
+applyStack Fork _ = Left NYI
 applyStack _ (Stack []) = Left EmptyStack1
 applyStack _ (Stack [_]) = Left EmptyStack2
 

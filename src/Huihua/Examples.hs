@@ -13,7 +13,7 @@ import Data.Text.Encoding (encodeUtf8)
 -- >>> import Data.String.Interpolate
 -- >>> import Huihua.Examples
 -- >>> import Huihua.Parse as P
--- >>> import Harry.Array as A
+-- >>> import Harpie.Array as A
 -- >>> import Data.List qualified as List
 -- >>> import Data.ByteString.Char8 qualified as C
 -- >>> import FlatParse.Basic
@@ -107,9 +107,6 @@ exPage2 =
 
 -- | character arrays not yet implemented.
 --
--- > run exPage3
---
--- FIXME: fix glyphtoken string
 -- >>> exPage3 & C.lines & fmap (runParser tokens)
 -- [OK [] "",OK [GlyphToken String,NameToken "Unabashedly",NameToken "I",NameToken "utilize",NameToken "arrays",GlyphToken String] "",OK [GlyphToken NotEquals,CharacterToken ' ',GlyphToken Duplicate,CommentToken " Mask of non-spaces"] "",OK [GlyphToken Partition,GlyphToken First,CommentToken " All first letters"] ""]
 exPage3 :: ByteString
