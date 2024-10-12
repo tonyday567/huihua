@@ -1,2 +1,4 @@
 packages:
   huihua.cabal
+
+write-ghc-environment-files: always
