@@ -45,7 +45,7 @@ library
         , deepseq            >=1.4.4 && <1.6
         , distributive       >=0.4 && <0.7
         , flatparse          >=0.3.5 && <0.6
-        , harpie              >=0.1 && <0.2
+        , harpie             >=0.1 && <0.2
         , markup-parse       >=0.1.1 && <0.2
         , prettyprinter      >=1.7 && <1.8
         , random             >=1.2 && <1.3
