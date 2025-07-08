@@ -1,7 +1,7 @@
 # huihua
 
-[![img](https://img.shields.io/hackage/v/huihua.svg)](https://hackage.haskell.org/package/huihua)
-[![img](https://github.com/tonyday567/huihua/workflows/haskell-ci/badge.svg)](https://github.com/tonyday567/huihua/actions?query=workflow%3Ahaskell-ci)
+[![hackage](https://img.shields.io/hackage/v/huihua.svg)](https://hackage.haskell.org/package/huihua)
+[![build](https://github.com/tonyday567/huihua/actions/workflows/haskell-ci.yml/badge.svg)](https://github.com/tonyday567/huihua/actions/workflows/haskell-ci.yml)
 
 `huihua` is a Haskell port of [uiua](https://www.uiua.org/)
 
