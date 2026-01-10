@@ -1,6 +1,5 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 
@@ -198,6 +197,24 @@ run bs = either viaShow pretty (interpI (parseI bs))
 allTheSymbols :: [ByteString]
 allTheSymbols = [".", ",", "\226\136\182", ";", "\226\136\152", "\194\172", "\194\177", "\194\175", "\226\140\181", "\226\136\154", "\226\151\139", "\226\140\138", "\226\140\136", "\226\129\133", "=", "\226\137\160", "&lt;", "\226\137\164", "&gt;", "\226\137\165", "+", "-", "\195\151", "\195\183", "\226\151\191", "\226\129\191", "\226\130\153", "\226\134\167", "\226\134\165", "\226\136\160", "\226\167\187", "\226\150\179", "\226\135\161", "\226\138\162", "\226\135\140", "\226\153\173", "\226\139\175", "\226\141\137", "\226\141\143", "\226\141\150", "\226\138\154", "\226\138\155", "\226\138\157", "\226\150\161", "\226\138\148", "\226\137\133", "\226\138\159", "\226\138\130", "\226\138\143", "\226\138\161", "\226\134\175", "\226\134\153", "\226\134\152", "\226\134\187", "\226\151\171", "\226\150\189", "\226\140\149", "\226\136\138", "\226\138\151", "/", "\226\136\167", "\\", "\226\136\181", "\226\137\161", "\226\136\186", "\226\138\158", "\226\138\160", "\226\141\165", "\226\138\149", "\226\138\156", "\226\141\152", "\226\139\133", "\226\138\153", "\226\136\169", "\226\138\131", "\226\138\147", "\226\141\156", "\226\141\154", "\226\172\154", "'", "?", "\226\141\163", "\226\141\164", "!", "\226\142\139", "\226\134\172", "\226\154\130", "\206\183", "\207\128", "\207\132", "\226\136\158", "~", "_", "[", "]", "{", "}", "(", ")", "\194\175", "@", "$", "\"", "\226\134\144", "|", "#"]
 
+-- | Parse a glyph (operator/function symbol).
+--
+-- __Note on UTF-8 limitation:__ This parser uses FlatParse's @switch@ combinator,
+-- which compiles string literals into an optimized byte-level trie. This works
+-- correctly for single-byte ASCII glyphs (e.g., @"."@, @"+"@), but has a
+-- known limitation with multi-byte UTF-8 sequences.
+--
+-- Multi-byte UTF-8 glyphs (e.g., @"◌"@ (U+9676), @"∘"@ (U+2218)) fail to match
+-- at runtime, even when encoded correctly as UTF-8 octal escapes in the source.
+-- See <https://github.com/tonyday567/huihua/issues/> for investigation details.
+--
+-- __Workaround:__ Currently, doctests using multi-byte glyphs in expressions
+-- cannot be validated. These are marked as incomplete examples pending a fix
+-- to the parser implementation.
+--
+-- __Future fix:__ Consider replacing @switch@ with a manual ByteString matching
+-- function that understands UTF-8 encoding, or migrating to a parser combinator
+-- library with built-in UTF-8 support.
 glyphP :: Parser e Glyph
 glyphP =
   $( switch
@@ -206,102 +223,102 @@ glyphP =
            "." -> pure Duplicate
            "," -> pure Over
            ":" -> pure Flip
-           "◌" -> pure Pop
-           "⟜" -> pure On
-           "⊸" -> pure By
+           "\342\227\214" -> pure Pop
+           "\342\237\234" -> pure On
+           "\342\212\270" -> pure By
            "?" -> pure Stack'
-           "⸮" -> pure Trace
+           "\342\270\256" -> pure Trace
            "dump" -> pure Dump
-           "∘" -> pure Identity
-           "⋅" -> pure Gap
-           "⊙" -> pure Dip
-           "∩" -> pure Both
-           "⊃" -> pure Fork
-           "⊓" -> pure Bracket
-           "η" -> pure Eta
-           "π" -> pure Pi
-           "τ" -> pure Tau
-           "∞" -> pure Infinity
-           "¬" -> pure Not
-           "±" -> pure Sign
-           "¯" -> pure Negate
-           "⌵" -> pure AbsoluteValue
-           "√" -> pure Sqrt
-           "∿" -> pure Sine
-           "⌊" -> pure Floor
-           "⌈" -> pure Ceiling
-           "⁅" -> pure Round
+           "\342\210\230" -> pure Identity
+           "\342\213\205" -> pure Gap
+           "\342\212\231" -> pure Dip
+           "\342\210\251" -> pure Both
+           "\342\212\203" -> pure Fork
+           "\342\212\223" -> pure Bracket
+           "\316\267" -> pure Eta
+           "\317\200" -> pure Pi
+           "\317\204" -> pure Tau
+           "\342\210\236" -> pure Infinity
+           "\302\254" -> pure Not
+           "\302\261" -> pure Sign
+           "\302\257" -> pure Negate
+           "\342\214\265" -> pure AbsoluteValue
+           "\342\210\232" -> pure Sqrt
+           "\342\210\277" -> pure Sine
+           "\342\214\212" -> pure Floor
+           "\342\214\210" -> pure Ceiling
+           "\342\201\205" -> pure Round
            "=" -> pure Equals
-           "≠" -> pure NotEquals
+           "\342\211\240" -> pure NotEquals
            "<" -> pure LessThan
-           "≤" -> pure LessOrEqual
+           "\342\211\244" -> pure LessOrEqual
            ">" -> pure GreaterThan
-           "≥" -> pure GreaterOrEqual
+           "\342\211\245" -> pure GreaterOrEqual
            "+" -> pure Add
            "-" -> pure Subtract
-           "×" -> pure Multiply
-           "÷" -> pure Divide
-           "◿" -> pure Modulus
-           "ⁿ" -> pure Power
-           "ₙ" -> pure Logarithm
-           "↧" -> pure Minimum
-           "↥" -> pure Maximum
-           "∠" -> pure Atangent
-           "ℂ" -> pure Complex'
-           "⧻" -> pure Length
-           "△" -> pure Shape
-           "⇡" -> pure Range
-           "⊢" -> pure First
-           "⇌" -> pure Reverse
-           "♭" -> pure Deshape
-           "¤" -> pure Fix
-           "⋯" -> pure Bits
-           "⍉" -> pure Transpose
-           "⍏" -> pure Rise
-           "⍖" -> pure Fall
-           "⊚" -> pure Where
-           "⊛" -> pure Classify
-           "◴" -> pure Deduplicate
-           "◰" -> pure Unique
-           "□" -> pure Box
-           "≍" -> pure Match
-           "⊟" -> pure Couple
-           "⊂" -> pure Join
-           "⊏" -> pure Select
-           "⊡" -> pure Pick
-           "↯" -> pure Reshape
-           "☇" -> pure Rerank
-           "↙" -> pure Take
-           "↘" -> pure Drop
-           "↻" -> pure Rotate
-           "◫" -> pure Windows
-           "▽" -> pure Keep
-           "⌕" -> pure Find
-           "⦷" -> pure Mask
-           "∊" -> pure Member
-           "⊗" -> pure IndexOf
-           "⟔" -> pure Coordinate
-           "∵" -> pure Each
-           "≡" -> pure Rows
-           "⊞" -> pure Table
-           "⍚" -> pure Inventory
-           "⍥" -> pure Repeat
-           "⍢" -> pure Do
+           "\303\227" -> pure Multiply
+           "\303\267" -> pure Divide
+           "\342\227\277" -> pure Modulus
+           "\342\201\277" -> pure Power
+           "\342\202\231" -> pure Logarithm
+           "\342\206\247" -> pure Minimum
+           "\342\206\245" -> pure Maximum
+           "\342\210\240" -> pure Atangent
+           "\342\204\202" -> pure Complex'
+           "\342\247\273" -> pure Length
+           "\342\226\263" -> pure Shape
+           "\342\207\241" -> pure Range
+           "\342\212\242" -> pure First
+           "\342\207\214" -> pure Reverse
+           "\342\231\255" -> pure Deshape
+           "\302\244" -> pure Fix
+           "\342\213\257" -> pure Bits
+           "\342\215\211" -> pure Transpose
+           "\342\215\217" -> pure Rise
+           "\342\215\226" -> pure Fall
+           "\342\212\232" -> pure Where
+           "\342\212\233" -> pure Classify
+           "\342\227\264" -> pure Deduplicate
+           "\342\227\260" -> pure Unique
+           "\342\226\241" -> pure Box
+           "\342\211\215" -> pure Match
+           "\342\212\237" -> pure Couple
+           "\342\212\202" -> pure Join
+           "\342\212\217" -> pure Select
+           "\342\212\241" -> pure Pick
+           "\342\206\257" -> pure Reshape
+           "\342\230\207" -> pure Rerank
+           "\342\206\231" -> pure Take
+           "\342\206\230" -> pure Drop
+           "\342\206\273" -> pure Rotate
+           "\342\227\253" -> pure Windows
+           "\342\226\275" -> pure Keep
+           "\342\214\225" -> pure Find
+           "\342\246\267" -> pure Mask
+           "\342\210\212" -> pure Member
+           "\342\212\227" -> pure IndexOf
+           "\342\237\224" -> pure Coordinate
+           "\342\210\265" -> pure Each
+           "\342\211\241" -> pure Rows
+           "\342\212\236" -> pure Table
+           "\342\215\232" -> pure Inventory
+           "\342\215\245" -> pure Repeat
+           "\342\215\242" -> pure Do
            "/" -> pure Reduce
-           "∧" -> pure Fold
+           "\342\210\247" -> pure Fold
            "\\" -> pure Scan
-           "⊕" -> pure Group
-           "⊜" -> pure Partition
-           "°" -> pure Un
+           "\342\212\225" -> pure Group
+           "\342\212\234" -> pure Partition
+           "\302\260" -> pure Un
            "setinv" -> pure Setinv
            "setund" -> pure Setund
-           "⍜" -> pure Under
-           "◇" -> pure Content
-           "⬚" -> pure Fill
-           "⋕" -> pure Parse
-           "⍣" -> pure Try
-           "⍤" -> pure Assert
-           "⚂" -> pure Random
+           "\342\215\234" -> pure Under
+           "\342\227\207" -> pure Content
+           "\342\254\232" -> pure Fill
+           "\342\213\225" -> pure Parse
+           "\342\215\243" -> pure Try
+           "\342\215\244" -> pure Assert
+           "\342\232\202" -> pure Random
            "_" -> pure Strand
            "[" -> pure ArrayLeft
            "]" -> pure ArrayRight
@@ -309,8 +326,8 @@ glyphP =
            "}" -> pure BoxArrayRight
            "(" -> pure FunctionLeft
            ")" -> pure FunctionRight
-           "⟨" -> pure SwitchLeft
-           "⟩" -> pure SwitchRight
+           "\342\237\250" -> pure SwitchLeft
+           "\342\237\251" -> pure SwitchRight
            -- "¯" -> pure Negative
            "@" -> pure Character
            "$" -> pure Format
