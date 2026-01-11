@@ -199,145 +199,126 @@ allTheSymbols = [".", ",", "\226\136\182", ";", "\226\136\152", "\194\172", "\19
 
 -- | Parse a glyph (operator/function symbol).
 --
--- __Note on UTF-8 limitation:__ This parser uses FlatParse's @switch@ combinator,
--- which compiles string literals into an optimized byte-level trie. This works
--- correctly for single-byte ASCII glyphs (e.g., @"."@, @"+"@), but has a
--- known limitation with multi-byte UTF-8 sequences.
---
--- Multi-byte UTF-8 glyphs (e.g., @"◌"@ (U+9676), @"∘"@ (U+2218)) fail to match
--- at runtime, even when encoded correctly as UTF-8 octal escapes in the source.
--- See <https://github.com/tonyday567/huihua/issues/> for investigation details.
---
--- __Workaround:__ Currently, doctests using multi-byte glyphs in expressions
--- cannot be validated. These are marked as incomplete examples pending a fix
--- to the parser implementation.
---
--- __Future fix:__ Consider replacing @switch@ with a manual ByteString matching
--- function that understands UTF-8 encoding, or migrating to a parser combinator
--- library with built-in UTF-8 support.
+-- __UTF-8 Support:__ This parser uses string combinators to properly handle
+-- multi-byte UTF-8 sequences. Each glyph pattern is defined as a complete string
+-- that matches UTF-8 encoded characters.
 glyphP :: Parser e Glyph
 glyphP =
-  $( switch
-       [|
-         case _ of
-           "." -> pure Duplicate
-           "," -> pure Over
-           ":" -> pure Flip
-           "\342\227\214" -> pure Pop
-           "\342\237\234" -> pure On
-           "\342\212\270" -> pure By
-           "?" -> pure Stack'
-           "\342\270\256" -> pure Trace
-           "dump" -> pure Dump
-           "\342\210\230" -> pure Identity
-           "\342\213\205" -> pure Gap
-           "\342\212\231" -> pure Dip
-           "\342\210\251" -> pure Both
-           "\342\212\203" -> pure Fork
-           "\342\212\223" -> pure Bracket
-           "\316\267" -> pure Eta
-           "\317\200" -> pure Pi
-           "\317\204" -> pure Tau
-           "\342\210\236" -> pure Infinity
-           "\302\254" -> pure Not
-           "\302\261" -> pure Sign
-           "\302\257" -> pure Negate
-           "\342\214\265" -> pure AbsoluteValue
-           "\342\210\232" -> pure Sqrt
-           "\342\210\277" -> pure Sine
-           "\342\214\212" -> pure Floor
-           "\342\214\210" -> pure Ceiling
-           "\342\201\205" -> pure Round
-           "=" -> pure Equals
-           "\342\211\240" -> pure NotEquals
-           "<" -> pure LessThan
-           "\342\211\244" -> pure LessOrEqual
-           ">" -> pure GreaterThan
-           "\342\211\245" -> pure GreaterOrEqual
-           "+" -> pure Add
-           "-" -> pure Subtract
-           "\303\227" -> pure Multiply
-           "\303\267" -> pure Divide
-           "\342\227\277" -> pure Modulus
-           "\342\201\277" -> pure Power
-           "\342\202\231" -> pure Logarithm
-           "\342\206\247" -> pure Minimum
-           "\342\206\245" -> pure Maximum
-           "\342\210\240" -> pure Atangent
-           "\342\204\202" -> pure Complex'
-           "\342\247\273" -> pure Length
-           "\342\226\263" -> pure Shape
-           "\342\207\241" -> pure Range
-           "\342\212\242" -> pure First
-           "\342\207\214" -> pure Reverse
-           "\342\231\255" -> pure Deshape
-           "\302\244" -> pure Fix
-           "\342\213\257" -> pure Bits
-           "\342\215\211" -> pure Transpose
-           "\342\215\217" -> pure Rise
-           "\342\215\226" -> pure Fall
-           "\342\212\232" -> pure Where
-           "\342\212\233" -> pure Classify
-           "\342\227\264" -> pure Deduplicate
-           "\342\227\260" -> pure Unique
-           "\342\226\241" -> pure Box
-           "\342\211\215" -> pure Match
-           "\342\212\237" -> pure Couple
-           "\342\212\202" -> pure Join
-           "\342\212\217" -> pure Select
-           "\342\212\241" -> pure Pick
-           "\342\206\257" -> pure Reshape
-           "\342\230\207" -> pure Rerank
-           "\342\206\231" -> pure Take
-           "\342\206\230" -> pure Drop
-           "\342\206\273" -> pure Rotate
-           "\342\227\253" -> pure Windows
-           "\342\226\275" -> pure Keep
-           "\342\214\225" -> pure Find
-           "\342\246\267" -> pure Mask
-           "\342\210\212" -> pure Member
-           "\342\212\227" -> pure IndexOf
-           "\342\237\224" -> pure Coordinate
-           "\342\210\265" -> pure Each
-           "\342\211\241" -> pure Rows
-           "\342\212\236" -> pure Table
-           "\342\215\232" -> pure Inventory
-           "\342\215\245" -> pure Repeat
-           "\342\215\242" -> pure Do
-           "/" -> pure Reduce
-           "\342\210\247" -> pure Fold
-           "\\" -> pure Scan
-           "\342\212\225" -> pure Group
-           "\342\212\234" -> pure Partition
-           "\302\260" -> pure Un
-           "setinv" -> pure Setinv
-           "setund" -> pure Setund
-           "\342\215\234" -> pure Under
-           "\342\227\207" -> pure Content
-           "\342\254\232" -> pure Fill
-           "\342\213\225" -> pure Parse
-           "\342\215\243" -> pure Try
-           "\342\215\244" -> pure Assert
-           "\342\232\202" -> pure Random
-           "_" -> pure Strand
-           "[" -> pure ArrayLeft
-           "]" -> pure ArrayRight
-           "{" -> pure BoxArrayLeft
-           "}" -> pure BoxArrayRight
-           "(" -> pure FunctionLeft
-           ")" -> pure FunctionRight
-           "\342\237\250" -> pure SwitchLeft
-           "\342\237\251" -> pure SwitchRight
-           -- "¯" -> pure Negative
-           "@" -> pure Character
-           "$" -> pure Format
-           "\"" -> pure String
-           "!" -> pure Macro
-           "^" -> pure Placeholder
-           "←" -> pure Binding
-           "↚" -> pure PrivateBinding
-           "~" -> pure Import'
-           "|" -> pure Signature
-           "#" -> pure Comment
-         |]
-   )
+  (const Duplicate <$> byteString ".")
+    FP.<|> (const Over <$> byteString ",")
+    FP.<|> (const Flip <$> byteString ":")
+    FP.<|> (const Pop <$> byteString "◌")
+    FP.<|> (const On <$> byteString "⟜")
+    FP.<|> (const By <$> byteString "⊸")
+    FP.<|> (const Stack' <$> byteString "?")
+    FP.<|> (const Trace <$> byteString "⸮")
+    FP.<|> (const Dump <$> byteString "dump")
+    FP.<|> (const Identity <$> byteString "∘")
+    FP.<|> (const Gap <$> byteString "⋅")
+    FP.<|> (const Dip <$> byteString "⊡")
+    FP.<|> (const Both <$> byteString "∩")
+    FP.<|> (const Fork <$> byteString "⊃")
+    FP.<|> (const Bracket <$> byteString "⊣")
+    FP.<|> (const Eta <$> byteString "η")
+    FP.<|> (const Pi <$> byteString "π")
+    FP.<|> (const Tau <$> byteString "τ")
+    FP.<|> (const Infinity <$> byteString "∞")
+    FP.<|> (const Not <$> byteString "¬")
+    FP.<|> (const Sign <$> byteString "±")
+    FP.<|> (const Negate <$> byteString "¯")
+    FP.<|> (const AbsoluteValue <$> byteString "⌵")
+    FP.<|> (const Sqrt <$> byteString "√")
+    FP.<|> (const Sine <$> byteString "∿")
+    FP.<|> (const Floor <$> byteString "⌊")
+    FP.<|> (const Ceiling <$> byteString "⌈")
+    FP.<|> (const Round <$> byteString "⁅")
+    FP.<|> (const Equals <$> byteString "=")
+    FP.<|> (const NotEquals <$> byteString "≠")
+    FP.<|> (const LessThan <$> byteString "<")
+    FP.<|> (const LessOrEqual <$> byteString "≤")
+    FP.<|> (const GreaterThan <$> byteString ">")
+    FP.<|> (const GreaterOrEqual <$> byteString "≥")
+    FP.<|> (const Add <$> byteString "+")
+    FP.<|> (const Subtract <$> byteString "-")
+    FP.<|> (const Multiply <$> byteString "×")
+    FP.<|> (const Divide <$> byteString "÷")
+    FP.<|> (const Modulus <$> byteString "◿")
+    FP.<|> (const Power <$> byteString "ⁿ")
+    FP.<|> (const Logarithm <$> byteString "ₙ")
+    FP.<|> (const Minimum <$> byteString "↧")
+    FP.<|> (const Maximum <$> byteString "↥")
+    FP.<|> (const Atangent <$> byteString "∠")
+    FP.<|> (const Complex' <$> byteString "ℂ")
+    FP.<|> (const Length <$> byteString "⧻")
+    FP.<|> (const Shape <$> byteString "△")
+    FP.<|> (const Range <$> byteString "⇡")
+    FP.<|> (const First <$> byteString "⊢")
+    FP.<|> (const Reverse <$> byteString "⇌")
+    FP.<|> (const Deshape <$> byteString "♭")
+    FP.<|> (const Fix <$> byteString "¤")
+    FP.<|> (const Bits <$> byteString "⋯")
+    FP.<|> (const Transpose <$> byteString "⍉")
+    FP.<|> (const Rise <$> byteString "⍏")
+    FP.<|> (const Fall <$> byteString "⍖")
+    FP.<|> (const Where <$> byteString "⊚")
+    FP.<|> (const Classify <$> byteString "⊛")
+    FP.<|> (const Deduplicate <$> byteString "◴")
+    FP.<|> (const Unique <$> byteString "◰")
+    FP.<|> (const Box <$> byteString "▱")
+    FP.<|> (const Match <$> byteString "≅")
+    FP.<|> (const Couple <$> byteString "⊟")
+    FP.<|> (const Join <$> byteString "⊂")
+    FP.<|> (const Select <$> byteString "⊏")
+    FP.<|> (const Pick <$> byteString "⊡")
+    FP.<|> (const Reshape <$> byteString "⇯")
+    FP.<|> (const Rerank <$> byteString "☇")
+    FP.<|> (const Take <$> byteString "⇣")
+    FP.<|> (const Drop <$> byteString "⇢")
+    FP.<|> (const Rotate <$> byteString "⇳")
+    FP.<|> (const Windows <$> byteString "◫")
+    FP.<|> (const Keep <$> byteString "▽")
+    FP.<|> (const Find <$> byteString "⌕")
+    FP.<|> (const Mask <$> byteString "⦷")
+    FP.<|> (const Member <$> byteString "∊")
+    FP.<|> (const IndexOf <$> byteString "⊗")
+    FP.<|> (const Coordinate <$> byteString "⟔")
+    FP.<|> (const Each <$> byteString "∥")
+    FP.<|> (const Rows <$> byteString "≡")
+    FP.<|> (const Table <$> byteString "⊞")
+    FP.<|> (const Inventory <$> byteString "⍚")
+    FP.<|> (const Repeat <$> byteString "⍥")
+    FP.<|> (const Do <$> byteString "⍢")
+    FP.<|> (const Reduce <$> byteString "/")
+    FP.<|> (const Fold <$> byteString "∧")
+    FP.<|> (const Scan <$> byteString "\\")
+    FP.<|> (const Group <$> byteString "⊕")
+    FP.<|> (const Partition <$> byteString "⊜")
+    FP.<|> (const Un <$> byteString "°")
+    FP.<|> (const Setinv <$> byteString "setinv")
+    FP.<|> (const Setund <$> byteString "setund")
+    FP.<|> (const Under <$> byteString "⍘")
+    FP.<|> (const Content <$> byteString "◇")
+    FP.<|> (const Fill <$> byteString "⬚")
+    FP.<|> (const Parse <$> byteString "⋸")
+    FP.<|> (const Try <$> byteString "⍣")
+    FP.<|> (const Assert <$> byteString "⍤")
+    FP.<|> (const Random <$> byteString "⚂")
+    FP.<|> (const Strand <$> byteString "_")
+    FP.<|> (const ArrayLeft <$> byteString "[")
+    FP.<|> (const ArrayRight <$> byteString "]")
+    FP.<|> (const BoxArrayLeft <$> byteString "{")
+    FP.<|> (const BoxArrayRight <$> byteString "}")
+    FP.<|> (const FunctionLeft <$> byteString "(")
+    FP.<|> (const FunctionRight <$> byteString ")")
+    FP.<|> (const SwitchLeft <$> byteString "⟨")
+    FP.<|> (const SwitchRight <$> byteString "⟩")
+    FP.<|> (const Character <$> byteString "@")
+    FP.<|> (const Format <$> byteString "$")
+    FP.<|> (const String <$> byteString "\"")
+    FP.<|> (const Macro <$> byteString "!")
+    FP.<|> (const Placeholder <$> byteString "^")
+    FP.<|> (const Binding <$> byteString "←")
+    FP.<|> (const PrivateBinding <$> byteString "↚")
+    FP.<|> (const Import' <$> byteString "~")
+    FP.<|> (const Signature <$> byteString "|")
+    FP.<|> (const Comment <$> byteString "#")
