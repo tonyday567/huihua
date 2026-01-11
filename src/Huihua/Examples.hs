@@ -98,7 +98,7 @@ exPage2 =
 -- | character arrays not yet implemented.
 --
 -- >>> exPage3 & C.lines & fmap (runParser tokens)
--- [OK [] "",OK [GlyphToken String,NameToken "Unabashedly",NameToken "I",NameToken "utilize",NameToken "arrays",GlyphToken String] "",OK [GlyphToken NotEquals,CharacterToken ' ',GlyphToken Duplicate,CommentToken " Mask of non-spaces"] "",OK [GlyphToken Partition,GlyphToken First,CommentToken " All first letters"] ""]
+-- [OK [GlyphToken String,NameToken "Unabashedly",NameToken "I",NameToken "utilize",NameToken "arrays",GlyphToken String] "",OK [GlyphToken NotEquals,CharacterToken ' ',GlyphToken Duplicate,CommentToken " Mask of non-spaces"] "",OK [GlyphToken Partition,GlyphToken First,CommentToken " All first letters"] ""]
 exPage3 :: ByteString
 exPage3 =
   "\"Unabashedly I utilize arrays\"\n"
