@@ -1,16 +1,12 @@
-{-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Huihua.Examples where
 
 import Data.ByteString (ByteString)
-import Data.String.Interpolate
-import Data.Text.Encoding (encodeUtf8)
 
 -- $setup
 -- >>> :set -XOverloadedStrings
--- >>> :set -XQuasiQuotes
 -- >>> import Prelude
--- >>> import Data.String.Interpolate
 -- >>> import Huihua.Examples
 -- >>> import Huihua.Parse as P
 -- >>> import Harpie.Array as A
@@ -32,22 +28,22 @@ import Data.Text.Encoding (encodeUtf8)
 --
 --
 -- ... format
--- >>> run [i|÷ 3 1|]
+-- >>> run "÷ 3 1"
 -- 0.3333333333333333
 --
 -- negate strand combination.
--- >>> run [i|¯2_¯2|]
+-- >>> run "¯2_¯2"
 -- ¯2
 --
 -- Implemented:
 --
 -- broadcasting scalars (and prefixed arrays?)
 --
--- >>> run [i|<2 [1 2 3]|]
+-- >>> run "<2 [1 2 3]"
 -- [1 0 0]
 --
 -- multi-dim bool reductions
--- >>> run [i|/<[2_1_0 0_4_3]|]
+-- >>> run "/<[2_1_0 0_4_3]"
 -- [1 0 0]
 --
 -- operators and stuff inside square brackets
@@ -57,12 +53,12 @@ import Data.Text.Encoding (encodeUtf8)
 --
 -- display negate sign for numbers
 --
--- >>> run [i|¯1|]
+-- >>> run "¯1"
 -- ¯1
 --
 -- strand square bracket combination
 --
--- >>> run [i|[1_2 3_4 5_6]|]
+-- >>> run "[1_2 3_4 5_6]"
 -- ╭─
 -- ╷ 1 2
 --   3 4
@@ -75,13 +71,10 @@ import Data.Text.Encoding (encodeUtf8)
 -- 4
 exPage1 :: ByteString
 exPage1 =
-  encodeUtf8
-    [i|
-[1 5 8 2]
-/+. \# Sum
-⧻:  \# Length
-÷   \# Divide
-|]
+  "[1 5 8 2]\n"
+    <> "/+. # Sum\n"
+    <> "⧻:  # Length\n"
+    <> "÷   # Divide\n"
 
 -- |
 --
@@ -97,13 +90,10 @@ exPage1 =
 --               ╯
 exPage2 :: ByteString
 exPage2 =
-  encodeUtf8
-    [i|
-2_3_4
-/×. \# Product
-⇡   \# Range
-↯:  \# Reshape
-|]
+  "2_3_4\n"
+    <> "/×. # Product\n"
+    <> "⇡   # Range\n"
+    <> "↯:  # Reshape\n"
 
 -- | character arrays not yet implemented.
 --
@@ -111,16 +101,12 @@ exPage2 =
 -- [OK [] "",OK [GlyphToken String,NameToken "Unabashedly",NameToken "I",NameToken "utilize",NameToken "arrays",GlyphToken String] "",OK [GlyphToken NotEquals,CharacterToken ' ',GlyphToken Duplicate,CommentToken " Mask of non-spaces"] "",OK [GlyphToken Partition,GlyphToken First,CommentToken " All first letters"] ""]
 exPage3 :: ByteString
 exPage3 =
-  [i|
-"Unabashedly I utilize arrays"
-≠@ . \# Mask of non-spaces
-⊜⊢   \# All first letters
-|]
+  "\"Unabashedly I utilize arrays\"\n"
+    <> "≠@ . # Mask of non-spaces\n"
+    <> "⊜⊢   # All first letters\n"
 
 nyiMultiArray :: ByteString
 nyiMultiArray =
-  [i|
-[1 2 3
- 4 5 6
- 7 8 9]
-|]
+  "[1 2 3\n"
+    <> " 4 5 6\n"
+    <> " 7 8 9]\n"
