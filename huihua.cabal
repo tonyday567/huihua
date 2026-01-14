@@ -16,6 +16,7 @@ tested-with:
   ghc ==9.8.4
   ghc ==9.10.2
   ghc ==9.12.2
+  ghc ==9.14.1
 
 source-repository head
   type: git
@@ -63,7 +64,7 @@ library
     deepseq >=1.4.4 && <1.6,
     distributive >=0.4 && <0.7,
     flatparse >=0.3.5 && <0.6,
-    harpie >=0.1 && <0.2,
+    harpie >=0.1 && <0.3,
     markup-parse >=0.1.1 && <0.3,
     prettyprinter >=1.7 && <1.8,
     random >=1.2 && <1.4,
