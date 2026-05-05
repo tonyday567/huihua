@@ -78,6 +78,6 @@ library
     Huihua.Examples
     Huihua.Glyphs
     Huihua.Parse
-    Huihua.Parse.FlatParse
+    Huihua.Parse.Parser
     Huihua.Stack
     Huihua.Warning

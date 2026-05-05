@@ -1,6 +1,5 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TemplateHaskell #-}
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 
 module Huihua.Parse where
@@ -13,12 +12,11 @@ import Data.ByteString (ByteString)
 import Data.ByteString.Char8 qualified as C
 import Data.Function ((&))
 import Data.List qualified as List
-import FlatParse.Basic as FP
 import Harpie.Array (Array)
 import Harpie.Array qualified as D
 import Huihua.ArrayU
 import Huihua.Glyphs
-import Huihua.Parse.FlatParse
+import Huihua.Parse.Parser as FP
 import Huihua.Stack as S
 import Huihua.Warning
 import Prettyprinter
@@ -38,18 +36,18 @@ data Token = StringToken ByteString | GlyphToken Glyph | DoubleToken Double | Ch
 token :: Parser e Token
 token =
   (DoubleToken <$> double)
-    FP.<|> (CharacterToken <$> ($(char '@') *> anyChar))
-    FP.<|> (CommentToken <$> ($(char '#') *> takeRest))
+    FP.<|> (CharacterToken <$> (char '@' *> anyChar))
+    FP.<|> (CommentToken <$> (char '#' *> FP.takeRest))
     FP.<|> (GlyphToken <$> glyphP)
     FP.<|> (StringToken <$> wrappedDq)
-    FP.<|> (NameToken <$> some (satisfy isLatinLetter))
-    FP.<|> (TypeToken <$ $(string "type"))
+    FP.<|> (NameToken <$> FP.some (satisfy isLatinLetter))
+    FP.<|> (TypeToken <$ string "type")
 
 tokens :: Parser e [Token]
-tokens = many (ws_ *> token) <* ws_
+tokens = FP.many (FP.ws_ *> token) <* FP.ws_
 
 tokenize :: ByteString -> Either ByteString [[Token]]
-tokenize bs = runParserEither (many tokens) bs
+tokenize bs = runParserEither (FP.many tokens) bs
 
 newtype Assembler t a = Assembler {assemble :: [t] -> Maybe (a, [t])} deriving (Functor)
 
@@ -124,10 +122,10 @@ aStrand = Assembler $ \case
   _ -> Nothing
 
 aArray :: Assembler Token a -> Assembler Token (Array a)
-aArray a = aArrayLeft *> (D.asArray <$> many a) <* aArrayRight
+aArray a = aArrayLeft *> (D.asArray <$> A.many a) <* aArrayRight
 
 aArrayStrand :: Assembler Token a -> Assembler Token (Array a)
-aArrayStrand a = fmap D.asArray . (:) <$> a <*> some (aStrand *> a)
+aArrayStrand a = fmap D.asArray . (:) <$> a <*> A.some (aStrand *> a)
 
 aToken :: Assembler Token Token
 aToken = Assembler $ \case
@@ -146,7 +144,7 @@ aInstruction =
     A.<|> (IArray . D.toScalar <$> aDouble)
 
 aInstructions :: Assembler Token [Instruction]
-aInstructions = many aInstruction
+aInstructions = A.many aInstruction
 
 instructionize :: [Token] -> [Instruction]
 instructionize ts = foldMap fst (assemble aInstructions ts)
