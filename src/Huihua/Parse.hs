@@ -10,50 +10,53 @@ import Data.Bifunctor
 import Data.Bool (bool)
 import Data.ByteString (ByteString)
 import Data.ByteString.Char8 qualified as C
+import Data.Char (ord)
 import Data.Function ((&))
 import Data.List qualified as List
+import Data.Text (Text)
+import Data.Text.Encoding (encodeUtf8)
+import Data.Text qualified as T
 import Harpie.Array (Array)
 import Harpie.Array qualified as D
 import Huihua.ArrayU
 import Huihua.Glyphs
-import Huihua.Parse.Parser as FP
 import Huihua.Stack as S
 import Huihua.Warning
 import Prettyprinter
 import Prelude as P hiding (null)
 
--- $setup
--- >>> :set -XOverloadedStrings
--- >>> import Huihua.Parse as P
--- >>> import Harpie.Array as A
--- >>> import Data.List qualified as List
--- >>> import Huihua.Examples
--- >>> import Prettyprinter
+import Circuit.Parser
+import Circuit.Parser qualified as CP
 
-data Token = StringToken ByteString | GlyphToken Glyph | DoubleToken Double | CharacterToken Char | NameToken String | CommentToken ByteString | TypeToken deriving (Eq, Ord, Show)
+data Token = StringToken ByteString | GlyphToken Glyph | DoubleToken Double | CharacterToken Char | NameToken ByteString | CommentToken ByteString | TypeToken deriving (Eq, Ord, Show)
+
+type P = Parser Text Char
 
 -- | Double token has precedence over duplicate
-token :: Parser e Token
+token :: P Token
 token =
   (DoubleToken <$> double)
-    FP.<|> (CharacterToken <$> (char '@' *> anyChar))
-    FP.<|> (CommentToken <$> (char '#' *> FP.takeRest))
-    FP.<|> (GlyphToken <$> glyphP)
-    FP.<|> (StringToken <$> wrappedDq)
-    FP.<|> (NameToken <$> FP.some (satisfy isLatinLetter))
-    FP.<|> (TypeToken <$ string "type")
+    CP.<|> (CharacterToken <$> (char '@' *> anyToken))
+    CP.<|> (CommentToken <$> (encodeUtf8 <$> (char '#' *> takeRest)))
+    CP.<|> (GlyphToken <$> glyphP)
+    CP.<|> (StringToken <$> wrappedDq)
+    CP.<|> (NameToken <$> (encodeUtf8 . T.pack <$> CP.some (satisfy isLatinLetter)))
+    CP.<|> (TypeToken <$ string "type")
 
-tokens :: Parser e [Token]
-tokens = FP.many (FP.ws_ *> token) <* FP.ws_
+tokens :: P [Token]
+tokens = CP.many (ws_ *> token) <* ws_
 
-tokenize :: ByteString -> Either ByteString [[Token]]
-tokenize bs = runParserEither (FP.many tokens) bs
+-- | Parse ByteString input via UTF-8 decode.
+tokenize :: Text -> Either ByteString [[Token]]
+tokenize t = case runParser (CP.many tokens) t of
+  That _  -> Left "parse error"
+  This a  -> Right a
+  These a _ -> Right a
 
 newtype Assembler t a = Assembler {assemble :: [t] -> Maybe (a, [t])} deriving (Functor)
 
 instance Applicative (Assembler t) where
   pure a = Assembler (\xs -> Just (a, xs))
-
   f <*> a = Assembler $ \xs -> case assemble f xs of
     Nothing -> Nothing
     Just (f', xs') -> case assemble a xs' of
@@ -152,14 +155,14 @@ instructionize ts = foldMap fst (assemble aInstructions ts)
 -- |
 -- >>> parseI exPage1
 -- [IOp Divide,IOp Length,IOp Flip,IReduceOp Add,IOp Duplicate,IArray (UnsafeArray [4] [1.0,5.0,8.0,2.0])]
-parseI :: ByteString -> [Instruction]
-parseI bs = parseT bs & instructionize
+parseI :: Text -> [Instruction]
+parseI t = parseT t & instructionize
 
 -- |
 -- >>> parseT exPage1
 -- [GlyphToken Divide,GlyphToken Length,GlyphToken Flip,GlyphToken Reduce,GlyphToken Add,GlyphToken Duplicate,GlyphToken ArrayLeft,DoubleToken 1.0,DoubleToken 5.0,DoubleToken 8.0,DoubleToken 2.0,GlyphToken ArrayRight]
-parseT :: ByteString -> [Token]
-parseT bs = bs & C.lines & fmap (runParser_ tokens) & List.reverse & mconcat & filter (P.not . isComment)
+parseT :: Text -> [Token]
+parseT t = T.lines t & fmap runParser_ & List.reverse & mconcat & filter (P.not . isComment)
 
 isComment :: Token -> Bool
 isComment (CommentToken _) = True
@@ -187,136 +190,204 @@ interpI as = foldr ((>=>) . istep) pure (List.reverse as) (Stack [])
 --
 -- >>> run exPage1
 -- 4
-run :: ByteString -> Doc ann
-run bs = either viaShow pretty (interpI (parseI bs))
+run :: Text -> Doc ann
+run t = either viaShow pretty (interpI (parseI t))
 
--- >>> sequence_ $ C.putStr <$> (ts <> ["\n"])
--- .,∶;∘¬±¯⌵√○⌊⌈⁅=≠&lt;≤&gt;≥+-×÷◿ⁿₙ↧↥∠⧻△⇡⊢⇌♭⋯⍉⍏⍖⊚⊛⊝□⊔≅⊟⊂⊏⊡↯↙↘↻◫▽⌕∊⊗/∧\∵≡∺⊞⊠⍥⊕⊜⍘⋅⊙∩⊃⊓⍜⍚⬚'?⍣⍤!⎋↬⚂ηπτ∞~_[]{}()¯@$"←|
 allTheSymbols :: [ByteString]
 allTheSymbols = [".", ",", "\226\136\182", ";", "\226\136\152", "\194\172", "\194\177", "\194\175", "\226\140\181", "\226\136\154", "\226\151\139", "\226\140\138", "\226\140\136", "\226\129\133", "=", "\226\137\160", "&lt;", "\226\137\164", "&gt;", "\226\137\165", "+", "-", "\195\151", "\195\183", "\226\151\191", "\226\129\191", "\226\130\153", "\226\134\167", "\226\134\165", "\226\136\160", "\226\167\187", "\226\150\179", "\226\135\161", "\226\138\162", "\226\135\140", "\226\153\173", "\226\139\175", "\226\141\137", "\226\141\143", "\226\141\150", "\226\138\154", "\226\138\155", "\226\138\157", "\226\150\161", "\226\138\148", "\226\137\133", "\226\138\159", "\226\138\130", "\226\138\143", "\226\138\161", "\226\134\175", "\226\134\153", "\226\134\152", "\226\134\187", "\226\151\171", "\226\150\189", "\226\140\149", "\226\136\138", "\226\138\151", "/", "\226\136\167", "\\", "\226\136\181", "\226\137\161", "\226\136\186", "\226\138\158", "\226\138\160", "\226\141\165", "\226\138\149", "\226\138\156", "\226\141\152", "\226\139\133", "\226\138\153", "\226\136\169", "\226\138\131", "\226\138\147", "\226\141\156", "\226\141\154", "\226\172\154", "'", "?", "\226\141\163", "\226\141\164", "!", "\226\142\139", "\226\134\172", "\226\154\130", "\206\183", "\207\128", "\207\132", "\226\136\158", "~", "_", "[", "]", "{", "}", "(", ")", "\194\175", "@", "$", "\"", "\226\134\144", "|", "#"]
 
 -- | Parse a glyph (operator/function symbol).
---
--- __UTF-8 Support:__ This parser uses string combinators to properly handle
--- multi-byte UTF-8 sequences. Each glyph pattern is defined as a complete string
--- that matches UTF-8 encoded characters.
-glyphP :: Parser e Glyph
+glyphP :: P Glyph
 glyphP =
-  (const Duplicate <$> byteString ".")
-    FP.<|> (const Over <$> byteString ",")
-    FP.<|> (const Flip <$> byteString ":")
-    FP.<|> (const Pop <$> byteString "◌")
-    FP.<|> (const On <$> byteString "⟜")
-    FP.<|> (const By <$> byteString "⊸")
-    FP.<|> (const Stack' <$> byteString "?")
-    FP.<|> (const Trace <$> byteString "⸮")
-    FP.<|> (const Dump <$> byteString "dump")
-    FP.<|> (const Identity <$> byteString "∘")
-    FP.<|> (const Gap <$> byteString "⋅")
-    FP.<|> (const Dip <$> byteString "⊡")
-    FP.<|> (const Both <$> byteString "∩")
-    FP.<|> (const Fork <$> byteString "⊃")
-    FP.<|> (const Bracket <$> byteString "⊣")
-    FP.<|> (const Eta <$> byteString "η")
-    FP.<|> (const Pi <$> byteString "π")
-    FP.<|> (const Tau <$> byteString "τ")
-    FP.<|> (const Infinity <$> byteString "∞")
-    FP.<|> (const Not <$> byteString "¬")
-    FP.<|> (const Sign <$> byteString "±")
-    FP.<|> (const Negate <$> byteString "¯")
-    FP.<|> (const AbsoluteValue <$> byteString "⌵")
-    FP.<|> (const Sqrt <$> byteString "√")
-    FP.<|> (const Sine <$> byteString "∿")
-    FP.<|> (const Floor <$> byteString "⌊")
-    FP.<|> (const Ceiling <$> byteString "⌈")
-    FP.<|> (const Round <$> byteString "⁅")
-    FP.<|> (const Equals <$> byteString "=")
-    FP.<|> (const NotEquals <$> byteString "≠")
-    FP.<|> (const LessThan <$> byteString "<")
-    FP.<|> (const LessOrEqual <$> byteString "≤")
-    FP.<|> (const GreaterThan <$> byteString ">")
-    FP.<|> (const GreaterOrEqual <$> byteString "≥")
-    FP.<|> (const Add <$> byteString "+")
-    FP.<|> (const Subtract <$> byteString "-")
-    FP.<|> (const Multiply <$> byteString "×")
-    FP.<|> (const Divide <$> byteString "÷")
-    FP.<|> (const Modulus <$> byteString "◿")
-    FP.<|> (const Power <$> byteString "ⁿ")
-    FP.<|> (const Logarithm <$> byteString "ₙ")
-    FP.<|> (const Minimum <$> byteString "↧")
-    FP.<|> (const Maximum <$> byteString "↥")
-    FP.<|> (const Atangent <$> byteString "∠")
-    FP.<|> (const Complex' <$> byteString "ℂ")
-    FP.<|> (const Length <$> byteString "⧻")
-    FP.<|> (const Shape <$> byteString "△")
-    FP.<|> (const Range <$> byteString "⇡")
-    FP.<|> (const First <$> byteString "⊢")
-    FP.<|> (const Reverse <$> byteString "⇌")
-    FP.<|> (const Deshape <$> byteString "♭")
-    FP.<|> (const Fix <$> byteString "¤")
-    FP.<|> (const Bits <$> byteString "⋯")
-    FP.<|> (const Transpose <$> byteString "⍉")
-    FP.<|> (const Rise <$> byteString "⍏")
-    FP.<|> (const Fall <$> byteString "⍖")
-    FP.<|> (const Where <$> byteString "⊚")
-    FP.<|> (const Classify <$> byteString "⊛")
-    FP.<|> (const Deduplicate <$> byteString "◴")
-    FP.<|> (const Unique <$> byteString "◰")
-    FP.<|> (const Box <$> byteString "▱")
-    FP.<|> (const Match <$> byteString "≅")
-    FP.<|> (const Couple <$> byteString "⊟")
-    FP.<|> (const Join <$> byteString "⊂")
-    FP.<|> (const Select <$> byteString "⊏")
-    FP.<|> (const Pick <$> byteString "⊡")
-    FP.<|> (const Reshape <$> byteString "⇯")
-    FP.<|> (const Rerank <$> byteString "☇")
-    FP.<|> (const Take <$> byteString "⇣")
-    FP.<|> (const Drop <$> byteString "⇢")
-    FP.<|> (const Rotate <$> byteString "⇳")
-    FP.<|> (const Windows <$> byteString "◫")
-    FP.<|> (const Keep <$> byteString "▽")
-    FP.<|> (const Find <$> byteString "⌕")
-    FP.<|> (const Mask <$> byteString "⦷")
-    FP.<|> (const Member <$> byteString "∊")
-    FP.<|> (const IndexOf <$> byteString "⊗")
-    FP.<|> (const Coordinate <$> byteString "⟔")
-    FP.<|> (const Each <$> byteString "∥")
-    FP.<|> (const Rows <$> byteString "≡")
-    FP.<|> (const Table <$> byteString "⊞")
-    FP.<|> (const Inventory <$> byteString "⍚")
-    FP.<|> (const Repeat <$> byteString "⍥")
-    FP.<|> (const Do <$> byteString "⍢")
-    FP.<|> (const Reduce <$> byteString "/")
-    FP.<|> (const Fold <$> byteString "∧")
-    FP.<|> (const Scan <$> byteString "\\")
-    FP.<|> (const Group <$> byteString "⊕")
-    FP.<|> (const Partition <$> byteString "⊜")
-    FP.<|> (const Un <$> byteString "°")
-    FP.<|> (const Setinv <$> byteString "setinv")
-    FP.<|> (const Setund <$> byteString "setund")
-    FP.<|> (const Under <$> byteString "⍘")
-    FP.<|> (const Content <$> byteString "◇")
-    FP.<|> (const Fill <$> byteString "⬚")
-    FP.<|> (const Parse <$> byteString "⋸")
-    FP.<|> (const Try <$> byteString "⍣")
-    FP.<|> (const Assert <$> byteString "⍤")
-    FP.<|> (const Random <$> byteString "⚂")
-    FP.<|> (const Strand <$> byteString "_")
-    FP.<|> (const ArrayLeft <$> byteString "[")
-    FP.<|> (const ArrayRight <$> byteString "]")
-    FP.<|> (const BoxArrayLeft <$> byteString "{")
-    FP.<|> (const BoxArrayRight <$> byteString "}")
-    FP.<|> (const FunctionLeft <$> byteString "(")
-    FP.<|> (const FunctionRight <$> byteString ")")
-    FP.<|> (const SwitchLeft <$> byteString "⟨")
-    FP.<|> (const SwitchRight <$> byteString "⟩")
-    FP.<|> (const Character <$> byteString "@")
-    FP.<|> (const Format <$> byteString "$")
-    FP.<|> (const String <$> byteString "\"")
-    FP.<|> (const Macro <$> byteString "!")
-    FP.<|> (const Placeholder <$> byteString "^")
-    FP.<|> (const Binding <$> byteString "←")
-    FP.<|> (const PrivateBinding <$> byteString "↚")
-    FP.<|> (const Import' <$> byteString "~")
-    FP.<|> (const Signature <$> byteString "|")
-    FP.<|> (const Comment <$> byteString "#")
+  (const Duplicate <$> string ".")
+    CP.<|> (const Over <$> string ",")
+    CP.<|> (const Flip <$> string ":")
+    CP.<|> (const Pop <$> string "◌")
+    CP.<|> (const On <$> string "⟜")
+    CP.<|> (const By <$> string "⊸")
+    CP.<|> (const Stack' <$> string "?")
+    CP.<|> (const Trace <$> string "⸮")
+    CP.<|> (const Dump <$> string "dump")
+    CP.<|> (const Identity <$> string "∘")
+    CP.<|> (const Gap <$> string "⋅")
+    CP.<|> (const Dip <$> string "⊡")
+    CP.<|> (const Both <$> string "∩")
+    CP.<|> (const Fork <$> string "⊃")
+    CP.<|> (const Bracket <$> string "⊣")
+    CP.<|> (const Eta <$> string "η")
+    CP.<|> (const Pi <$> string "π")
+    CP.<|> (const Tau <$> string "τ")
+    CP.<|> (const Infinity <$> string "∞")
+    CP.<|> (const Not <$> string "¬")
+    CP.<|> (const Sign <$> string "±")
+    CP.<|> (const Negate <$> string "¯")
+    CP.<|> (const AbsoluteValue <$> string "⌵")
+    CP.<|> (const Sqrt <$> string "√")
+    CP.<|> (const Sine <$> string "∿")
+    CP.<|> (const Floor <$> string "⌊")
+    CP.<|> (const Ceiling <$> string "⌈")
+    CP.<|> (const Round <$> string "⁅")
+    CP.<|> (const Equals <$> string "=")
+    CP.<|> (const NotEquals <$> string "≠")
+    CP.<|> (const LessThan <$> string "<")
+    CP.<|> (const LessOrEqual <$> string "≤")
+    CP.<|> (const GreaterThan <$> string ">")
+    CP.<|> (const GreaterOrEqual <$> string "≥")
+    CP.<|> (const Add <$> string "+")
+    CP.<|> (const Subtract <$> string "-")
+    CP.<|> (const Multiply <$> string "×")
+    CP.<|> (const Divide <$> string "÷")
+    CP.<|> (const Modulus <$> string "◿")
+    CP.<|> (const Power <$> string "ⁿ")
+    CP.<|> (const Logarithm <$> string "ₙ")
+    CP.<|> (const Minimum <$> string "↧")
+    CP.<|> (const Maximum <$> string "↥")
+    CP.<|> (const Atangent <$> string "∠")
+    CP.<|> (const Complex' <$> string "ℂ")
+    CP.<|> (const Length <$> string "⧻")
+    CP.<|> (const Shape <$> string "△")
+    CP.<|> (const Range <$> string "⇡")
+    CP.<|> (const First <$> string "⊢")
+    CP.<|> (const Reverse <$> string "⇌")
+    CP.<|> (const Deshape <$> string "♭")
+    CP.<|> (const Fix <$> string "¤")
+    CP.<|> (const Bits <$> string "⋯")
+    CP.<|> (const Transpose <$> string "⍉")
+    CP.<|> (const Rise <$> string "⍏")
+    CP.<|> (const Fall <$> string "⍖")
+    CP.<|> (const Where <$> string "⊚")
+    CP.<|> (const Classify <$> string "⊛")
+    CP.<|> (const Deduplicate <$> string "◴")
+    CP.<|> (const Unique <$> string "◰")
+    CP.<|> (const Box <$> string "▱")
+    CP.<|> (const Match <$> string "≅")
+    CP.<|> (const Couple <$> string "⊟")
+    CP.<|> (const Join <$> string "⊂")
+    CP.<|> (const Select <$> string "⊏")
+    CP.<|> (const Pick <$> string "⊡")
+    CP.<|> (const Reshape <$> string "⇯")
+    CP.<|> (const Rerank <$> string "☇")
+    CP.<|> (const Take <$> string "⇣")
+    CP.<|> (const Drop <$> string "⇢")
+    CP.<|> (const Rotate <$> string "⇳")
+    CP.<|> (const Windows <$> string "◫")
+    CP.<|> (const Keep <$> string "▽")
+    CP.<|> (const Find <$> string "⌕")
+    CP.<|> (const Mask <$> string "⦷")
+    CP.<|> (const Member <$> string "∊")
+    CP.<|> (const IndexOf <$> string "⊗")
+    CP.<|> (const Coordinate <$> string "⟔")
+    CP.<|> (const Each <$> string "∥")
+    CP.<|> (const Rows <$> string "≡")
+    CP.<|> (const Table <$> string "⊞")
+    CP.<|> (const Inventory <$> string "⍚")
+    CP.<|> (const Repeat <$> string "⍥")
+    CP.<|> (const Do <$> string "⍢")
+    CP.<|> (const Reduce <$> string "/")
+    CP.<|> (const Fold <$> string "∧")
+    CP.<|> (const Scan <$> string "\\")
+    CP.<|> (const Group <$> string "⊕")
+    CP.<|> (const Partition <$> string "⊜")
+    CP.<|> (const Un <$> string "°")
+    CP.<|> (const Setinv <$> string "setinv")
+    CP.<|> (const Setund <$> string "setund")
+    CP.<|> (const Under <$> string "⍘")
+    CP.<|> (const Content <$> string "◇")
+    CP.<|> (const Fill <$> string "⬚")
+    CP.<|> (const Parse <$> string "⋸")
+    CP.<|> (const Try <$> string "⍣")
+    CP.<|> (const Assert <$> string "⍤")
+    CP.<|> (const Random <$> string "⚂")
+    CP.<|> (const Strand <$> string "_")
+    CP.<|> (const ArrayLeft <$> string "[")
+    CP.<|> (const ArrayRight <$> string "]")
+    CP.<|> (const BoxArrayLeft <$> string "{")
+    CP.<|> (const BoxArrayRight <$> string "}")
+    CP.<|> (const FunctionLeft <$> string "(")
+    CP.<|> (const FunctionRight <$> string ")")
+    CP.<|> (const SwitchLeft <$> string "⟨")
+    CP.<|> (const SwitchRight <$> string "⟩")
+    CP.<|> (const Character <$> string "@")
+    CP.<|> (const Format <$> string "$")
+    CP.<|> (const String <$> string "\"")
+    CP.<|> (const Macro <$> string "!")
+    CP.<|> (const Placeholder <$> string "^")
+    CP.<|> (const Binding <$> string "←")
+    CP.<|> (const PrivateBinding <$> string "↚")
+    CP.<|> (const Import' <$> string "~")
+    CP.<|> (const Signature <$> string "|")
+    CP.<|> (const Comment <$> string "#")
+
+----------------------------------------------------------------------
+-- Whitespace
+----------------------------------------------------------------------
+
+isWhitespace :: Char -> Bool
+isWhitespace ' ' = True
+isWhitespace '\t' = True
+isWhitespace '\n' = True
+isWhitespace '\r' = True
+isWhitespace '\f' = True
+isWhitespace _ = False
+
+ws_ :: P ()
+ws_ = skipMany (satisfy isWhitespace)
+
+ws :: P Char
+ws = satisfy isWhitespace
+
+----------------------------------------------------------------------
+-- Character predicates
+----------------------------------------------------------------------
+
+isLatinLetter :: Char -> Bool
+isLatinLetter c = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
+
+isDigit :: Char -> Bool
+isDigit c = c >= '0' && c <= '9'
+
+----------------------------------------------------------------------
+-- Numeric parsers
+----------------------------------------------------------------------
+
+digit :: P Int
+digit = (\c -> ord c - ord '0') <$> satisfyAscii isDigit
+
+digits :: P (Int, Int)
+digits = do
+  (place, n) <- chainr (\n (!place, !acc) -> (place * 10, acc + place * n)) digit (pure (1, 0))
+  case place of
+    1 -> CP.empty
+    _ -> pure (place, n)
+
+double :: P Double
+double = do
+  (placel, nl) <- digits
+  withOption
+    (char '.' *> digits)
+    ( \(placer, nr) ->
+        case placel of
+          1 -> CP.empty
+          _ -> pure $ fromIntegral nl + fromIntegral nr / fromIntegral placer
+    )
+    ( case placel of
+        1 -> CP.empty
+        _ -> pure $ fromIntegral nl
+    )
+
+----------------------------------------------------------------------
+-- Quoted strings
+----------------------------------------------------------------------
+
+wrappedDq :: P ByteString
+wrappedDq = encodeUtf8 . T.pack <$> (char '"' *> CP.many (satisfy (/= '"')) <* char '"')
+
+----------------------------------------------------------------------
+-- Parser runner (strict: must consume all input)
+----------------------------------------------------------------------
+
+runParser_ :: Text -> [Token]
+runParser_ t = case runParser tokens t of
+  These a _ -> a
+  This a    -> a
+  That _    -> error "uncaught parse error"

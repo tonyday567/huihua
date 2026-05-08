@@ -60,12 +60,11 @@ library
     adjunctions >=4.0 && <5,
     base >=4.14 && <5,
     bytestring >=0.11.3 && <0.13,
+    circuits-parser >=0.1 && <0.2,
     containers >=0.6 && <0.9,
     deepseq >=1.4.4 && <1.6,
     distributive >=0.4 && <0.7,
-    flatparse >=0.3.5 && <0.6,
     harpie >=0.1 && <0.3,
-    markup-parse >=0.1.1 && <0.3,
     prettyprinter >=1.7 && <1.8,
     random >=1.2 && <1.4,
     text >=2.0 && <2.2,
@@ -78,6 +77,5 @@ library
     Huihua.Examples
     Huihua.Glyphs
     Huihua.Parse
-    Huihua.Parse.Parser
     Huihua.Stack
     Huihua.Warning

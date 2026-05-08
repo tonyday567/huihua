@@ -3,6 +3,7 @@
 module Huihua.Examples where
 
 import Data.ByteString (ByteString)
+import Data.Text (Text)
 
 -- $setup
 -- >>> :set -XOverloadedStrings
@@ -69,7 +70,7 @@ import Data.ByteString (ByteString)
 --
 -- >>> run exPage1
 -- 4
-exPage1 :: ByteString
+exPage1 :: Text
 exPage1 =
   "[1 5 8 2]\n"
     <> "/+. # Sum\n"
