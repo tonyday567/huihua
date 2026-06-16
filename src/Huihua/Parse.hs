@@ -4,6 +4,8 @@
 
 module Huihua.Parse where
 
+import Circuit.Parser
+import Circuit.Parser qualified as CP
 import Control.Applicative as A
 import Control.Monad
 import Data.Bifunctor
@@ -14,8 +16,8 @@ import Data.Char (ord)
 import Data.Function ((&))
 import Data.List qualified as List
 import Data.Text (Text)
-import Data.Text.Encoding (encodeUtf8)
 import Data.Text qualified as T
+import Data.Text.Encoding (encodeUtf8)
 import Harpie.Array (Array)
 import Harpie.Array qualified as D
 import Huihua.ArrayU
@@ -24,9 +26,6 @@ import Huihua.Stack as S
 import Huihua.Warning
 import Prettyprinter
 import Prelude as P hiding (null)
-
-import Circuit.Parser
-import Circuit.Parser qualified as CP
 
 data Token = StringToken ByteString | GlyphToken Glyph | DoubleToken Double | CharacterToken Char | NameToken ByteString | CommentToken ByteString | TypeToken deriving (Eq, Ord, Show)
 
@@ -49,8 +48,8 @@ tokens = CP.many (ws_ *> token) <* ws_
 -- | Parse ByteString input via UTF-8 decode.
 tokenize :: Text -> Either ByteString [[Token]]
 tokenize t = case runParser (CP.many tokens) t of
-  That _  -> Left "parse error"
-  This a  -> Right a
+  That _ -> Left "parse error"
+  This a -> Right a
   These a _ -> Right a
 
 newtype Assembler t a = Assembler {assemble :: [t] -> Maybe (a, [t])} deriving (Functor)
@@ -389,5 +388,5 @@ wrappedDq = encodeUtf8 . T.pack <$> (char '"' *> CP.many (satisfy (/= '"')) <* c
 runParser_ :: Text -> [Token]
 runParser_ t = case runParser tokens t of
   These a _ -> a
-  This a    -> a
-  That _    -> error "uncaught parse error"
+  This a -> a
+  That _ -> error "uncaught parse error"
