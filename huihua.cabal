@@ -64,7 +64,7 @@ library
     containers >=0.6 && <0.9,
     deepseq >=1.4.4 && <1.6,
     distributive >=0.4 && <0.7,
-    harpie >=0.1 && <0.3,
+    harpie >=0.1 && <0.4,
     prettyprinter >=1.7 && <1.8,
     random >=1.2 && <1.4,
     text >=2.0 && <2.2,

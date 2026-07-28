@@ -14,6 +14,7 @@ import Data.ByteString (ByteString)
 import Data.ByteString.Char8 qualified as C
 import Data.Char (ord)
 import Data.Function ((&))
+import Data.Functor.Identity (Identity)
 import Data.List qualified as List
 import Data.Text (Text)
 import Data.Text qualified as T
@@ -29,7 +30,7 @@ import Prelude as P hiding (null)
 
 data Token = StringToken ByteString | GlyphToken Glyph | DoubleToken Double | CharacterToken Char | NameToken ByteString | CommentToken ByteString | TypeToken deriving (Eq, Ord, Show)
 
-type P = Parser Text Char
+type P a = Parser Identity Text Char a
 
 -- | Double token has precedence over duplicate
 token :: P Token
@@ -47,7 +48,7 @@ tokens = CP.many (ws_ *> token) <* ws_
 
 -- | Parse ByteString input via UTF-8 decode.
 tokenize :: Text -> Either ByteString [[Token]]
-tokenize t = case runParser (CP.many tokens) t of
+tokenize t = case runParserIdentity (CP.many tokens) t of
   That _ -> Left "parse error"
   This a -> Right a
   These a _ -> Right a
@@ -386,7 +387,7 @@ wrappedDq = encodeUtf8 . T.pack <$> (char '"' *> CP.many (satisfy (/= '"')) <* c
 ----------------------------------------------------------------------
 
 runParser_ :: Text -> [Token]
-runParser_ t = case runParser tokens t of
+runParser_ t = case runParserIdentity tokens t of
   These a _ -> a
   This a -> a
   That _ -> error "uncaught parse error"

@@ -96,6 +96,7 @@ import Data.Maybe
 import Data.Ord
 import Data.Set qualified as Set
 import Data.Vector qualified as V
+import Data.Vector.Unboxed qualified as VU
 import Harpie.Array (Array (..))
 import Harpie.Array qualified as D
 import Harpie.Shape qualified as S
@@ -112,8 +113,8 @@ import Prelude qualified as P
 -- | Dyadic pervasive
 dyadicPervasive :: (b -> a -> c) -> Array a -> Array b -> Either HuihuaWarning (Array c)
 dyadicPervasive op a b
-  | D.shape a `List.isPrefixOf` D.shape b = Right (D.transmit (D.zipWith (flip op)) a b)
-  | D.shape b `List.isPrefixOf` D.shape a = Right (D.transmit (D.zipWith op) b a)
+  | VU.toList (D.shape a) `List.isPrefixOf` VU.toList (D.shape b) = Right (D.transmit (D.zipWith (flip op)) a b)
+  | VU.toList (D.shape b) `List.isPrefixOf` VU.toList (D.shape a) = Right (D.transmit (D.zipWith op) b a)
   | otherwise = Left SizeMismatch
 
 -- | Apply a binary boolean function, right-to-left
@@ -122,7 +123,7 @@ dyadicPervasiveBool f = dyadicPervasive (\x x' -> sig (f x x'))
 
 -- | https://www.uiua.org/docs/reduce
 reduceU :: (a -> b -> b) -> b -> Array a -> Array b
-reduceU f a0 a = D.reduces (S.exceptDims [0] (D.shape a)) (foldl' (flip f) a0) a
+reduceU f a0 a = D.reduces (S.exceptDimsL [0] (VU.toList (D.shape a))) (foldl' (flip f) a0) a
 
 -- | Version for no identity functions
 reduce1U :: (a -> a -> a) -> Array a -> Either HuihuaWarning (Array a)
@@ -131,7 +132,7 @@ reduce1U f a
   | D.length a == 1 = Right (D.select 0 0 a)
   | otherwise =
       let (x D.:> xs) = a
-       in Right (D.zipWith (foldl' (flip f)) x (D.extracts (S.exceptDims [0] (D.shape xs)) xs))
+       in Right (D.zipWith (foldl' (flip f)) x (D.extracts (S.exceptDimsL [0] (VU.toList (D.shape xs))) xs))
 
 -- * uiua api
 
@@ -237,7 +238,7 @@ range a
     s' = fmap signum a
 
 shape :: Array a -> Array Int
-shape = D.asArray . D.shape
+shape = D.asArray . VU.toList . D.shape
 
 first :: Array a -> Array a
 first = D.select 0 0
@@ -246,7 +247,7 @@ reverse :: Array a -> Array a
 reverse a = D.reverses [0] a
 
 deshape :: Array a -> Array a
-deshape a = D.reshape [product (D.shape a)] a
+deshape a = D.reshape [VU.product (D.shape a)] a
 
 fix :: Array a -> Array a
 fix a = D.elongate 0 a
@@ -267,7 +268,7 @@ bits a = D.join bs'
 
 -- | Rotate the axes by 1
 transpose :: Array a -> Array a
-transpose a = D.reorder (S.rotate 1 [0 .. D.rank a - 1]) a
+transpose a = D.reorder (S.rotateL 1 [0 .. D.rank a - 1]) a
 
 rise :: (Ord a) => Array a -> Array Int
 rise a = D.orders [0] $ D.extracts [0] a
@@ -276,7 +277,7 @@ fall :: (Ord a) => Array a -> Array Int
 fall a = D.ordersBy [0] (fmap Down) $ D.extracts [0] a
 
 where' :: Array Int -> Array Int
-where' a = D.join $ D.asArray $ fmap D.asArray $ fold $ D.zipWith replicate a (D.indices (D.shape a))
+where' a = D.join $ D.asArray $ fmap D.asArray $ fold $ D.zipWith replicate a (D.indices (VU.toList (D.shape a)))
 
 classifyScan :: (Ord a) => [a] -> [Int]
 classifyScan [] = []
@@ -329,7 +330,7 @@ unique a = (D.asArray . fmap fst . uniqueScan . D.arrayAs) (D.extracts [0] a)
 
 member :: (Ord a) => Array a -> Array a -> Array Int
 member i a
-  | D.isScalar i = fmap (sig . Set.member (D.fromScalar i) . Set.fromList . toList) (D.extracts (S.exceptDims [D.rank a - 1] (D.shape a)) a)
+  | D.isScalar i = fmap (sig . Set.member (D.fromScalar i) . Set.fromList . toList) (D.extracts (S.exceptDimsL [D.rank a - 1] (VU.toList (D.shape a))) a)
   | otherwise = D.asArray (fmap sig ks)
   where
     spliti
@@ -341,9 +342,9 @@ member i a
 
 indexOf :: (Eq a) => Array a -> Array a -> Array Int
 indexOf i a
-  | D.isScalar i = fmap (\x -> findI x (D.fromScalar i)) (D.extracts (S.exceptDims [D.rank a - 1] (D.shape a)) a)
+  | D.isScalar i = fmap (\x -> findI x (D.fromScalar i)) (D.extracts (S.exceptDimsL [D.rank a - 1] (VU.toList (D.shape a))) a)
   | D.rank a == 1 = fmap (findI a) i
-  | otherwise = fmap (findI (D.extracts (S.exceptDims [D.rank a - 1] (D.shape a)) a)) (D.extracts (S.exceptDims [D.rank i - 1] (D.shape i)) i)
+  | otherwise = fmap (findI (D.extracts (S.exceptDimsL [D.rank a - 1] (VU.toList (D.shape a))) a)) (D.extracts (S.exceptDimsL [D.rank i - 1] (VU.toList (D.shape i))) i)
   where
     findI xs i' = fromMaybe (List.length xs) . List.elemIndex i' . toList $ xs
 
@@ -364,11 +365,11 @@ rotate r a = D.rowWise (D.dimsWise D.rotate) (D.arrayAs r) a
 -- | https://www.uiua.org/docs/join
 join :: Array a -> Array a -> Either HuihuaWarning (Array a)
 join a a'
-  | P.drop 1 (D.shape a) == P.drop 1 (D.shape a') = Right $ D.concatenate 0 a a'
-  | D.shape a == P.drop 1 (D.shape a') = Right $ D.prepend 0 a a'
-  | P.drop 1 (D.shape a) == D.shape a' = Right $ D.append 0 a a'
-  | D.shape a `List.isSuffixOf` D.shape a' = Right $ D.prepend 0 (D.repeat (List.drop 1 $ D.shape a') a) a'
-  | D.shape a' `List.isSuffixOf` D.shape a = Right $ D.append 0 a (D.repeat (List.drop 1 $ D.shape a) a')
+  | P.drop 1 (VU.toList (D.shape a)) == P.drop 1 (VU.toList (D.shape a')) = Right $ D.concatenate 0 a a'
+  | VU.toList (D.shape a) == P.drop 1 (VU.toList (D.shape a')) = Right $ D.prepend 0 a a'
+  | P.drop 1 (VU.toList (D.shape a)) == VU.toList (D.shape a') = Right $ D.append 0 a a'
+  | VU.toList (D.shape a) `List.isSuffixOf` VU.toList (D.shape a') = Right $ D.prepend 0 (D.repeat (List.drop 1 $ VU.toList (D.shape a')) a) a'
+  | VU.toList (D.shape a') `List.isSuffixOf` VU.toList (D.shape a) = Right $ D.append 0 a (D.repeat (List.drop 1 $ VU.toList (D.shape a)) a')
   | otherwise = Left SizeMismatch
 
 -- | Select multiple rows from an array
@@ -387,7 +388,7 @@ select i a = D.joins [0 .. D.rank i - 1] $ (\x -> D.indexes [0] [x] a) <$> i
 --  [5,6]]
 reshape :: Array Int -> Array a -> Array a
 reshape i a
-  | D.rank i == 0 = D.repeat (D.fromScalar i : D.shape a) a
+  | D.rank i == 0 = D.repeat (D.fromScalar i : VU.toList (D.shape a)) a
   | otherwise = D.array i' (V.take (product i') (V.concat (replicate (1 + product i' `div` V.length (D.asVector a)) (D.asVector a))))
   where
     iflat = D.arrayAs i
@@ -416,13 +417,13 @@ drop i a
 windows :: Array Int -> Array a -> Array a
 windows ws a = D.windows ws' a
   where
-    ws' = List.zipWith (\w s -> bool w (s - w + 1) (w < 0)) (D.arrayAs ws) (D.shape a)
+    ws' = List.zipWith (\w s -> bool w (s - w + 1) (w < 0)) (D.arrayAs ws) (VU.toList (D.shape a))
 
 keep :: Array Int -> Array a -> Array a
-keep i a = D.join $ D.asArray $ fold $ D.zipWith replicate (D.cycle (List.take 1 $ D.shape a) i) (D.extracts [0] a)
+keep i a = D.join $ D.asArray $ fold $ D.zipWith replicate (D.cycle (List.take 1 $ VU.toList (D.shape a)) i) (D.extracts [0] a)
 
 find :: (Eq a) => Array a -> Array a -> Array Int
-find i a = D.pad 0 (D.shape a :: [Int]) (fmap sig $ D.find i a)
+find i a = D.pad 0 (VU.toList (D.shape a)) (fmap sig $ D.find i a)
 
 mask :: (Eq a) => Array a -> Array a -> Array Int
 mask i a = m
@@ -431,15 +432,15 @@ mask i a = m
     found = fmap sig $ D.findNoOverlap iexp a
     accf = V.drop 1 . V.map snd . V.scanl' (\(acc, _) x -> bool (acc + 1, acc + 1) (acc, 0) (x == 0)) (0, 0)
     found' = D.unsafeModifyVector accf found
-    found'' = D.pad 0 (D.shape a) found'
-    start = (\s -> 1 - s) <$> D.shape iexp
-    backchecks s = List.zip (List.zipWith (\s0 s' -> max 0 (s0 + s')) start s) (List.zipWith (\i' s' -> min i' (s' + 1)) (D.shape iexp) s)
-    m = D.tabulate (D.shape a) (\s -> sum (D.rowWise (D.dimsWise (\d (o, l) -> D.slice d o l)) (backchecks s) found''))
+    found'' = D.pad 0 (VU.toList (D.shape a)) found'
+    start = (\s -> 1 - s) <$> VU.toList (D.shape iexp)
+    backchecks s = List.zip (List.zipWith (\s0 s' -> max 0 (s0 + s')) start s) (List.zipWith (\i' s' -> min i' (s' + 1)) (VU.toList (D.shape iexp)) s)
+    m = D.tabulate (VU.toList (D.shape a)) (\s -> sum (D.rowWise (D.dimsWise (\d (o, l) -> D.slice d o l)) (backchecks s) found''))
 
 -- * reducing operators
 
 reduceBool :: (Num b) => (a -> a -> Bool) -> Array a -> Array b
-reduceBool f a = fmap (bool 0 1 . or) (D.reduces (S.exceptDims [0] (D.shape a)) (D.diffs [0] [1] (D.zipWith f)) a)
+reduceBool f a = fmap (bool 0 1 . or) (D.reduces (S.exceptDimsL [0] (VU.toList (D.shape a))) (D.diffs [0] [1] (D.zipWith f)) a)
 
 equalsR :: (Eq a) => Array a -> Array Int
 equalsR = reduceBool (==)
