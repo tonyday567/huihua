@@ -1,6 +1,7 @@
 packages:
   huihua.cabal
   ../circuits/circuits.cabal
+  ../circuits-mat/circuits-mat.cabal
   ../circuits-parser/circuits-parser.cabal
   ../chart-svg/chart-svg.cabal
   ../markup-parse/markup-parse.cabal
@@ -8,7 +9,6 @@ packages:
   ../numhask-space/numhask-space.cabal
   ../numhask-diff/numhask-diff.cabal
   ../harpie/harpie.cabal
-  ../harpie-numhask/harpie-numhask.cabal
   ../process-stats/process-stats.cabal
 
 write-ghc-environment-files: always
