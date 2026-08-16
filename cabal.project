@@ -9,6 +9,6 @@ packages:
   ../numhask-space/numhask-space.cabal
   ../circuits-diff/circuits-diff.cabal
   ../harpie/harpie.cabal
-  ../process-stats/process-stats.cabal
+  ../circuits-stats/circuits-stats.cabal
 
 write-ghc-environment-files: always
