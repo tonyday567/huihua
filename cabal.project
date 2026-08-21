@@ -1,14 +1,14 @@
 packages:
   huihua.cabal
-  ../circuits/circuits.cabal
-  ../circuits-mat/circuits-mat.cabal
-  ../circuits-parser/circuits-parser.cabal
-  ../chart-svg/chart-svg.cabal
-  ../markup-parse/markup-parse.cabal
-  ../numhask/numhask.cabal
-  ../numhask-space/numhask-space.cabal
-  ../circuits-diff/circuits-diff.cabal
-  ../harpie/harpie.cabal
-  ../circuits-stats/circuits-stats.cabal
+  ../../haskell/circuits/circuits.cabal
+  ../../haskell/circuits-mat/circuits-mat.cabal
+  ../../haskell/circuits-parser/circuits-parser.cabal
+  ../../haskell/chart-svg/chart-svg.cabal
+  ../../haskell/markup-parse/markup-parse.cabal
+  ../../haskell/numhask/numhask.cabal
+  ../../haskell/numhask-space/numhask-space.cabal
+  ../../haskell/circuits-diff/circuits-diff.cabal
+  ../../haskell/harpie/harpie.cabal
+  ../../haskell/circuits-stats/circuits-stats.cabal
 
 write-ghc-environment-files: always
